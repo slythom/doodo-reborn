@@ -23,10 +23,10 @@ var (
 // Options de table — sous-ensemble de §1.3 qui affecte les règles.
 // Les house rules (§1.5) s'ajouteront ici via des hooks, non en dur.
 type Options struct {
-	DicePerPlayer   int // 3-5, défaut 5
-	PacoJoker       bool
-	CalzaEnabled    bool
-	PalificoEnabled bool
+	DicePerPlayer   int  `json:"dice_per_player"` // 3-5, défaut 5
+	PacoJoker       bool `json:"paco_joker"`
+	CalzaEnabled    bool `json:"calza_enabled"`
+	PalificoEnabled bool `json:"palifico_enabled"`
 }
 
 func DefaultOptions() Options {
@@ -42,8 +42,8 @@ func (o Options) validate() error {
 
 // Bid est une enchère « au moins Quantity dés de valeur Value sur la table ».
 type Bid struct {
-	Quantity int
-	Value    int // Paco (1) à 6
+	Quantity int `json:"quantity"`
+	Value    int `json:"value"` // Paco (1) à 6
 }
 
 func (b Bid) String() string {
@@ -80,12 +80,12 @@ const (
 )
 
 type Event struct {
-	Type    EventType
-	Player  int
-	Bid     Bid
-	Count   int     // EvReveal : décompte réel de la valeur enchérie
-	Dice    [][]int // EvReveal : dés de chaque joueur (par index)
-	Ranking []int   // EvGameOver : classement du 1er au dernier
+	Type    EventType `json:"type"`
+	Player  int       `json:"player"`
+	Bid     Bid       `json:"bid"`
+	Count   int       `json:"count"`   // EvReveal : décompte réel
+	Dice    [][]int   `json:"dice"`    // EvReveal : dés de chaque joueur (par siège)
+	Ranking []int     `json:"ranking"` // EvGameOver : classement du 1er au dernier
 }
 
 type Player struct {
@@ -214,7 +214,9 @@ func (g *Game) LegalBid(b Bid) bool {
 		return false
 	}
 	if !g.HasBid {
-		return true
+		// Ouverture de manche : pas de paco — sauf en palifico où la valeur
+		// est libre (le premier enchérisseur la fixe, §1.3).
+		return g.Palifico || b.Value != Paco
 	}
 	if g.Palifico && g.fixedV != 0 {
 		return b.Value == g.fixedV && b.Quantity > g.Current.Quantity
@@ -233,7 +235,10 @@ func (g *Game) LegalBid(b Bid) bool {
 // MinBid est l'enchère minimale légale, utilisée par l'auto-action du timer.
 func (g *Game) MinBid() Bid {
 	if !g.HasBid {
-		return Bid{Quantity: 1, Value: Paco}
+		if g.Palifico {
+			return Bid{Quantity: 1, Value: Paco}
+		}
+		return Bid{Quantity: 1, Value: 2} // ouverture : paco interdit
 	}
 	if g.Palifico && g.fixedV != 0 {
 		return Bid{Quantity: g.Current.Quantity + 1, Value: g.fixedV}

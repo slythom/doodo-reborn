@@ -41,6 +41,8 @@ avec les transitions Pacos (valeur 1) :
 - Passer aux Pacos : nouvelle quantité = `ceil(X / 2)`.
 - Quitter les Pacos pour une valeur normale : nouvelle quantité minimum = `2X + 1`.
 
+La **première enchère d'une manche ne peut pas porter sur les Pacos** — sauf en manche Palifico, où le premier enchérisseur fixe librement la valeur (§1.3).
+
 Il n'existe **pas de variante officielle** de la règle de surenchère ; les variantes éventuelles relèvent des règles personnalisées (§1.5).
 
 ### 1.3 Options configurables par table

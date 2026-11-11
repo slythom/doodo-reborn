@@ -74,6 +74,9 @@ func (b *Normal) opening(g *game.Game, seat int) game.Bid {
 			best, v = counts[val], val
 		}
 	}
+	if v == game.Paco && !g.Palifico {
+		v = 2 // ouverture : paco interdit hors palifico
+	}
 	others := totalDice(g) - len(me.Dice)
 	q := countMatch(me.Dice, v, jokers) + int(math.Round(float64(others)*probPerDie(g, v)))
 	if q < 1 {

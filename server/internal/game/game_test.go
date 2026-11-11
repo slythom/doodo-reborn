@@ -36,8 +36,10 @@ func TestLegalBid(t *testing.T) {
 		bid           Bid
 		want          bool
 	}{
-		// Première enchère : tout est légal dans les bornes.
-		{"first min", Bid{}, 0, Bid{1, Paco}, true},
+		// Première enchère : paco interdit hors palifico.
+		{"first paco", Bid{}, 0, Bid{1, Paco}, false},
+		{"first paco palifico", Bid{}, 1, Bid{1, Paco}, true},
+		{"first normal", Bid{}, 0, Bid{1, 2}, true},
 		{"first max", Bid{}, 0, Bid{30, 6}, true},
 		{"first qty 0", Bid{}, 0, Bid{0, 3}, false},
 		{"first value 0", Bid{}, 0, Bid{2, 0}, false},
@@ -88,9 +90,14 @@ func TestLegalBid(t *testing.T) {
 
 func TestMinBid(t *testing.T) {
 	g := newTestGame(t)
-	if got := g.MinBid(); got != (Bid{1, Paco}) {
-		t.Errorf("MinBid sans enchère = %v", got)
+	if got := g.MinBid(); got != (Bid{1, 2}) { // ouverture : paco interdit
+		t.Errorf("MinBid sans enchère = %v, want (1,2)", got)
 	}
+	g.Palifico = true
+	if got := g.MinBid(); got != (Bid{1, Paco}) {
+		t.Errorf("MinBid palifico sans enchère = %v, want (1,paco)", got)
+	}
+	g.Palifico = false
 	bidAt(g, 3, 4)
 	if got := g.MinBid(); got != (Bid{4, 4}) {
 		t.Errorf("MinBid après (3,4) = %v, want (4,4)", got)
@@ -332,6 +339,10 @@ func TestPalificoTriggered(t *testing.T) {
 	}
 	if !pali || !g.Palifico {
 		t.Errorf("manche palifico attendue, evs=%v palifico=%v", evs, g.Palifico)
+	}
+	// Le perdant (encore en vie à 1 dé) entame la manche palifico (§1.1).
+	if g.Turn != 0 {
+		t.Errorf("turn=%d, want 0 (le perdant entame)", g.Turn)
 	}
 }
 

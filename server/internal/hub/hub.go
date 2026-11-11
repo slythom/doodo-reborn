@@ -171,6 +171,10 @@ func (h *Hub) dispatch(c *conn, s *session, m protocol.ClientMsg) {
 		if s.room != nil {
 			s.room.Chat(s.token, m.Text)
 		}
+	case "emote":
+		if s.room != nil {
+			s.room.Emote(s.token, m.Target, m.Text)
+		}
 	case "leave":
 		h.leave(s)
 	default:

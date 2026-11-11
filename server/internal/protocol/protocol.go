@@ -58,9 +58,10 @@ type Error struct {
 }
 
 type Notice struct {
-	Kind string `json:"kind"`           // "kicked" | "room_closed" | "chat" | "emote" | "info"
-	From string `json:"from,omitempty"` // pseudo émetteur (chat/emote)
-	Text string `json:"text,omitempty"`
+	Kind   string `json:"kind"`             // "kicked" | "room_closed" | "chat" | "emote" | "info"
+	From   string `json:"from,omitempty"`   // pseudo émetteur (chat/emote)
+	Text   string `json:"text,omitempty"`   // message ou type d'emote
+	Target string `json:"target,omitempty"` // siège cible (emote)
 }
 
 // ---- État de la salle (snapshot, specs §4 : complet à chaque changement) ----

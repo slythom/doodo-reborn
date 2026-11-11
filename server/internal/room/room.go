@@ -394,6 +394,23 @@ func (r *Room) Leave(id string) bool {
 	return false
 }
 
+// validEmotes est la whitelist des interactions visuelles (§4.3).
+var validEmotes = map[string]bool{"tomato": true}
+
+// Emote diffuse une interaction visuelle vers le siège cible (§4.3).
+// Le serveur ne fait que valider et relayer — l'anim est côté client.
+func (r *Room) Emote(id, targetSeat, kind string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m := r.memberLocked(id)
+	if m == nil || !validEmotes[kind] {
+		return
+	}
+	r.emitLocked(nil, protocol.Envelope{Type: "notice", Data: protocol.Notice{
+		Kind: "emote", From: m.Name, Text: kind, Target: targetSeat,
+	}})
+}
+
 // Chat relaie un message au canal unique (joueurs + spectateurs, §4.3).
 func (r *Room) Chat(id, text string) {
 	r.mu.Lock()

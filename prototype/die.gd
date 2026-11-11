@@ -68,8 +68,9 @@ static func build() -> Die:
 		[Vector3.DOWN, Vector3(90, 0, 0), 2],
 		[Vector3.RIGHT, Vector3(0, 90, 0), 3],
 		[Vector3.LEFT, Vector3(0, -90, 0), 4],
-		[Vector3.FORWARD, Vector3.ZERO, 1],
-		[Vector3.BACK, Vector3(0, 180, 0), 6],
+		[Vector3.FORWARD, Vector3(0, 180, 0), 1], # -Z : orienter le quad vers l'extérieur
+		[Vector3.BACK, Vector3.ZERO, 6],         # +Z : idem
+
 	]
 	for f in faces:
 		var q := MeshInstance3D.new()

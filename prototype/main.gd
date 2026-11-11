@@ -1,20 +1,38 @@
+# main.gd — scène de jeu 3D, pilotée par les snapshots serveur (Net.view).
+# Le client ne simule rien : il affiche l'état et envoie des actions.
 extends Node3D
 
 const TABLE_TOP_Y := 0.78
 const TABLE_RADIUS := 1.15
+const SEAT_RADIUS := 1.6
+const CUP_RADIUS := 0.98
+const MY_SEAT_ANGLE := 90.0  # mon siège : face caméra
+const ARC_LEFT := 215.0      # arc des adversaires : extrémité gauche
+const ARC_RIGHT := 325.0     #                  extrémité droite
+const ARC_CENTER := 270.0
 
-var dice: Array[Die] = []
-var dice_home: Array[Vector3] = []
-var miis: Array[Mii] = []
+var view := {}
+var seats := {}          # seat_idx -> {mii, cup, name_lbl, count_lbl}
+var my_dice: Array[Die] = []
 var splat_tex: ImageTexture
-var cup: MeshInstance3D
-var cup_home := Vector3(0, TABLE_TOP_Y + 0.085, 1.05)
 var cam: Camera3D
-var busy := false
-var thrown := false
 var sway_t := 0.0
-var _shot := OS.get_cmdline_user_args().has("--shot")
-var _frames := 0
+var splat_by_mii := {}   # mii -> splat node
+
+# HUD
+var title_lbl: Label
+var bid_lbl: Label
+var turn_lbl: Label
+var status_lbl: Label
+var qty_spin: SpinBox
+var val_opt: OptionButton
+var bid_btn: Button
+var dudo_btn: Button
+var calza_btn: Button
+var reveal_panel: PanelContainer
+var reveal_lbl: Label
+var over_panel: PanelContainer
+var over_lbl: Label
 
 static func mat(color: Color, roughness := 0.8, emission := false) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -40,10 +58,396 @@ func _ready() -> void:
 	_lights()
 	_room()
 	_table()
-	_characters()
-	_player_cup_dice()
 	_camera()
 	_hud()
+	view = Net.view
+	_build_seats()
+	_refresh()
+	Net.room_state.connect(_on_view)
+	Net.game_events.connect(_on_events)
+	Net.net_error.connect(func(_c: String, m: String) -> void: status_lbl.text = m)
+	Net.notice_msg.connect(_on_notice)
+	Net.connection_closed.connect(func() -> void: status_lbl.text = "connexion perdue")
+
+func _on_view(v: Dictionary) -> void:
+	view = v
+	_refresh()
+
+# ---- Construction des sièges depuis le snapshot ----
+
+# Angle d'un siège : moi face caméra ; les autres dans l'ordre horaire de ma
+# gauche (joueur suivant, offset 1 → 215°) vers ma droite (offset n-1 → 325°).
+func _seat_angle(offset: int) -> float:
+	if offset == 0:
+		return MY_SEAT_ANGLE
+	var n: int = view.players.size()
+	if n == 2:
+		return ARC_CENTER
+	return ARC_LEFT + (offset - 1) * (ARC_RIGHT - ARC_LEFT) / float(n - 2)
+
+func _build_seats() -> void:
+	var n: int = view.players.size()
+	var my_seat: int = view.get("your_seat", 0)
+	var skins := [Color(0.95, 0.78, 0.6), Color(0.85, 0.62, 0.42), Color(0.98, 0.85, 0.7), Color(0.7, 0.5, 0.35), Color(0.92, 0.72, 0.55), Color(0.8, 0.6, 0.45)]
+	var shirts := [Color(0.2, 0.5, 0.85), Color(0.85, 0.3, 0.25), Color(0.2, 0.65, 0.3), Color(0.9, 0.75, 0.2), Color(0.55, 0.3, 0.7), Color(0.3, 0.7, 0.75)]
+	var hairs := [Color(0.2, 0.12, 0.06), Color(0.5, 0.32, 0.15), Color(0.1, 0.1, 0.1), Color(0.75, 0.55, 0.2), Color(0.35, 0.2, 0.1), Color(0.6, 0.6, 0.65)]
+
+	for i in n:
+		var p: Dictionary = view.players[i]
+		var p_seat: int = p.get("seat", i)
+		var offset := (p_seat - my_seat + n) % n
+		var a := deg_to_rad(_seat_angle(offset))
+		var pos := Vector3(cos(a) * SEAT_RADIUS, 0, sin(a) * SEAT_RADIUS)
+		var seat := {}
+		seats[p_seat] = seat
+
+		# Gobelet de chaque joueur sur la table.
+		var cup := _cup_mesh()
+		cup.position = Vector3(cos(a) * CUP_RADIUS, TABLE_TOP_Y + 0.085, sin(a) * CUP_RADIUS)
+		add_child(cup)
+		seat["cup"] = cup
+
+		if offset == 0:
+			# Moi : mains + dés visibles (vue subjective, pas de Mii).
+			_build_my_hands()
+			continue
+
+		# Adversaire : Mii aux variantes déterministes (dérivées du nom).
+		var h: int = abs(p.get("name", "?").hash())
+		var mii := Mii.build(skins[h % 6], shirts[(h / 6) % 6], hairs[(h / 36) % 6], h % 3 == 0, h % 6, h % 4)
+		mii.position = pos
+		mii.rotation.y = atan2(-pos.x, -pos.z)
+		mii.set_meta("seat", p_seat)
+		add_child(mii)
+		seat["mii"] = mii
+
+		var nl := Label3D.new()
+		nl.text = p.get("name", "?")
+		nl.font_size = 48
+		nl.position = pos + Vector3(0, 1.75, 0)
+		nl.modulate = Color(1, 1, 1, 0.85)
+		add_child(nl)
+		seat["name_lbl"] = nl
+
+		var cl := Label3D.new()
+		cl.font_size = 40
+		cl.position = Vector3(cos(a) * (CUP_RADIUS + 0.02), TABLE_TOP_Y + 0.32, sin(a) * (CUP_RADIUS + 0.02))
+		cl.modulate = Color(1, 0.9, 0.5)
+		add_child(cl)
+		seat["count_lbl"] = cl
+
+func _build_my_hands() -> void:
+	var skin := Color(0.95, 0.78, 0.6)
+	for side in [-1.0, 1.0]:
+		var hand := MeshInstance3D.new()
+		var hs := SphereMesh.new()
+		hs.radius = 0.045
+		hs.height = 0.09
+		hs.material = mat(skin, 0.55)
+		hand.mesh = hs
+		hand.position = Vector3(side * 0.45, TABLE_TOP_Y + 0.03, 1.3)
+		add_child(hand)
+
+# ---- Rafraîchissement depuis le snapshot ----
+
+func _refresh() -> void:
+	_update_players()
+	_update_my_dice()
+	_update_turn()
+	_update_bid()
+	_update_actions()
+
+func _update_players() -> void:
+	for i in view.players.size():
+		var p: Dictionary = view.players[i]
+		var p_seat: int = p.get("seat", i)
+		if not seats.has(p_seat):
+			continue
+		var seat: Dictionary = seats[p_seat]
+		var eliminated: bool = p.get("dice_count", 0) == 0
+		if seat.has("count_lbl"):
+			seat["count_lbl"].text = "éliminé" if eliminated else "%d dé(s)" % p.get("dice_count", 0)
+		if seat.has("mii") and eliminated:
+			seat["mii"].modulate = Color(1, 1, 1, 0.3)
+
+func _update_my_dice() -> void:
+	for d in my_dice:
+		d.queue_free()
+	my_dice.clear()
+	var me := _player_by_seat(view.get("your_seat", -1))
+	if me.is_empty():
+		return
+	var dice_vals: Array = me.get("dice", [])
+	var a := deg_to_rad(MY_SEAT_ANGLE)
+	var center := Vector3(cos(a) * (CUP_RADIUS + 0.25), TABLE_TOP_Y + Die.SIZE / 2.0 + 0.001, sin(a) * (CUP_RADIUS + 0.25))
+	for i in dice_vals.size():
+		var d := Die.build()
+		d.freeze = true
+		var spread := dice_vals.size() - 1
+		d.position = center + Vector3((i - spread / 2.0) * 0.1, 0, 0.12)
+		d.rotation_degrees = _face_up_rotation(dice_vals[i])
+		add_child(d)
+		my_dice.append(d)
+
+# Fait pointer la face `value` du dé vers le haut.
+# Faces de Die.build : 5:+Y 2:-Y 3:+X 4:-X 1:-Z (FORWARD) 6:+Z (BACK).
+func _face_up_rotation(v: int) -> Vector3:
+	match v:
+		5: return Vector3.ZERO
+		2: return Vector3(180, 0, 0)
+		3: return Vector3(0, 0, 90)
+		4: return Vector3(0, 0, -90)
+		1: return Vector3(90, 0, 0)   # -Z -> +Y
+		6: return Vector3(-90, 0, 0)  # +Z -> +Y
+	return Vector3.ZERO
+
+func _player_by_seat(seat: int) -> Dictionary:
+	for p in view.get("players", []):
+		if int(p.get("seat", -1)) == seat:
+			return p
+	return {}
+
+func _update_turn() -> void:
+	var turn: int = view.get("turn", -1)
+	var mine: int = view.get("your_seat", -1)
+	if turn == mine:
+		turn_lbl.text = "À toi de jouer !"
+		turn_lbl.modulate = Color(0.4, 1, 0.4)
+	elif turn >= 0:
+		turn_lbl.text = "Tour de %s" % _player_name(turn)
+		turn_lbl.modulate = Color(1, 1, 1, 0.7)
+	else:
+		turn_lbl.text = ""
+
+func _update_bid() -> void:
+	if view.get("has_bid", false):
+		var b: Dictionary = view.bid
+		var bidder := _player_name(view.get("bidder", -1))
+		var vstr := "paco" if b.get("value", 0) == 1 else str(b.get("value", 0))
+		bid_lbl.text = "Enchère : %d x %s — %s" % [b.get("quantity", 0), vstr, bidder]
+	else:
+		bid_lbl.text = "Manche %d — pas encore d'enchère" % view.get("round", 1)
+	if view.get("palifico", false):
+		bid_lbl.text += "   [PALIFICO]"
+
+# Reproduction client-side de la légalité (miroir de game.LegalBid) pour
+# activer/désactiver le bouton — le serveur reste l'arbitre.
+func _legal(q: int, v: int) -> bool:
+	if q < 1 or v < 1 or v > 6:
+		return false
+	if not view.get("has_bid", false):
+		return view.get("palifico", false) or v != 1  # ouverture : paco interdit
+	var c: Dictionary = view.bid
+	var cq: int = c.get("quantity", 0)
+	var cv: int = c.get("value", 1)
+	if view.get("palifico", false):
+		return q > cq  # valeur figée côté serveur
+	if cv == 1 and v != 1:
+		return q >= 2 * cq + 1
+	if cv != 1 and v == 1:
+		return q >= int(ceil(cq / 2.0))
+	return q > cq or (q == cq and v > cv)
+
+func _update_actions() -> void:
+	var my_turn: bool = view.get("turn", -1) == view.get("your_seat", -2) and not view.get("over", false)
+	bid_btn.disabled = not my_turn or not _legal(int(qty_spin.value), val_opt.selected + 1)
+	dudo_btn.disabled = not my_turn or not view.get("has_bid", false)
+	calza_btn.disabled = not my_turn or not view.get("has_bid", false) or not view.get("options", {}).get("game", {}).get("calza_enabled", true)
+
+# ---- Événements serveur (révélation, pertes, fin) ----
+
+func _on_events(events: Array) -> void:
+	for e in events:
+		match e.get("type", ""):
+			"reveal":
+				_show_reveal(e)
+			"eliminated":
+				var name := _player_name(e.get("player", -1))
+				status_lbl.text = "%s est éliminé" % name
+			"game_over":
+				_show_game_over(e)
+
+func _player_name(seat: int) -> String:
+	return _player_by_seat(seat).get("name", "?")
+
+func _show_reveal(e: Dictionary) -> void:
+	var lines := PackedStringArray()
+	lines.append("Enchère %d x %s — réalité : %d" % [
+		e.get("bid", {}).get("quantity", 0),
+		"paco" if e.get("bid", {}).get("value", 0) == 1 else str(e.get("bid", {}).get("value", 0)),
+		e.get("count", 0)])
+	var dice: Array = e.get("dice", [])
+	for i in dice.size():
+		if dice[i] is Array and not dice[i].is_empty():
+			lines.append("%s : %s" % [_player_name(i), str(dice[i])])
+	reveal_lbl.text = "\n".join(lines)
+	reveal_panel.visible = true
+	get_tree().create_timer(4.0).timeout.connect(func() -> void: reveal_panel.visible = false)
+
+func _show_game_over(e: Dictionary) -> void:
+	var lines := PackedStringArray(["Classement"])
+	for r in e.get("ranking", []).size():
+		var seat: int = e["ranking"][r]
+		lines.append("%d. %s" % [r + 1, _player_name(seat)])
+	over_lbl.text = "\n".join(lines)
+	over_panel.visible = true
+
+# ---- Emotes (tomate) : envoi optimiste + réception ----
+
+func _unhandled_input(event: InputEvent) -> void:
+	var pos := Vector2.ZERO
+	var pressed := false
+	if event is InputEventScreenTouch and event.pressed:
+		pos = event.position
+		pressed = true
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		pos = event.position
+		pressed = true
+	if not pressed:
+		return
+	var from := cam.project_ray_origin(pos)
+	var to := from + cam.project_ray_normal(pos) * 10.0
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty() or not hit.collider.has_meta("mii"):
+		return
+	var mii: Mii = hit.collider.get_meta("mii")
+	Net.emote(mii.get_meta("seat"), "tomato")  # le serveur diffuse aux autres
+	_throw_tomato(mii)                         # anim optimiste locale
+
+func _on_notice(d: Dictionary) -> void:
+	match d.get("kind", ""):
+		"emote":
+			# ne pas rejouer notre propre emote (déjà animée en optimiste)
+			var my_name := _player_name(view.get("your_seat", -1))
+			if d.get("from", "") != my_name and d.get("text", "") == "tomato":
+				var seat := int(d.get("target", "-1"))
+				if seats.has(seat) and seats[seat].has("mii"):
+					_throw_tomato(seats[seat]["mii"])
+		"chat":
+			status_lbl.text = "%s : %s" % [d.get("from", "?"), d.get("text", "")]
+
+# ---- HUD ----
+
+func _hud() -> void:
+	var layer := CanvasLayer.new()
+	add_child(layer)
+
+	title_lbl = _label(20, HORIZONTAL_ALIGNMENT_CENTER)
+	title_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	title_lbl.position.y = 20
+	title_lbl.text = "%s — %s" % [view.get("name", "Doodo"), view.get("code", "")]
+	layer.add_child(title_lbl)
+
+	bid_lbl = _label(30, HORIZONTAL_ALIGNMENT_CENTER)
+	bid_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	bid_lbl.position.y = 90
+	layer.add_child(bid_lbl)
+
+	turn_lbl = _label(26, HORIZONTAL_ALIGNMENT_CENTER)
+	turn_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	turn_lbl.position.y = 140
+	layer.add_child(turn_lbl)
+
+	status_lbl = _label(20, HORIZONTAL_ALIGNMENT_CENTER)
+	status_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	status_lbl.position.y = -180
+	layer.add_child(status_lbl)
+
+	# Barre d'actions en bas : deux lignes pour tenir en portrait 720 px.
+	var bar := VBoxContainer.new()
+	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bar.position.y = -170
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.add_theme_constant_override("separation", 10)
+	layer.add_child(bar)
+
+	var row1 := HBoxContainer.new()
+	row1.alignment = BoxContainer.ALIGNMENT_CENTER
+	row1.add_theme_constant_override("separation", 12)
+	bar.add_child(row1)
+
+	qty_spin = SpinBox.new()
+	qty_spin.min_value = 1
+	qty_spin.max_value = 60
+	qty_spin.value = 1
+	qty_spin.custom_minimum_size = Vector2(100, 60)
+	qty_spin.add_theme_font_size_override("font_size", 26)
+	qty_spin.value_changed.connect(func(_v: float) -> void: _update_actions())
+	row1.add_child(qty_spin)
+
+	val_opt = OptionButton.new()
+	for v in ["Paco", "2", "3", "4", "5", "6"]:
+		val_opt.add_item(v)
+	val_opt.custom_minimum_size = Vector2(140, 60)
+	val_opt.add_theme_font_size_override("font_size", 26)
+	val_opt.item_selected.connect(func(_i: int) -> void: _update_actions())
+	row1.add_child(val_opt)
+
+	bid_btn = _button("Enchérir", row1)
+	bid_btn.pressed.connect(func() -> void: Net.bid(int(qty_spin.value), val_opt.selected + 1))
+
+	var row2 := HBoxContainer.new()
+	row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	row2.add_theme_constant_override("separation", 12)
+	bar.add_child(row2)
+
+	dudo_btn = _button("Dudo !", row2)
+	dudo_btn.pressed.connect(func() -> void: Net.dudo())
+	calza_btn = _button("Calza !", row2)
+	calza_btn.pressed.connect(func() -> void: Net.calza())
+
+	var leave_btn := _button("Quitter", row2)
+	leave_btn.pressed.connect(func() -> void:
+		Net.leave()
+		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
+
+	# Overlay de révélation (2D, décision actée).
+	reveal_panel = PanelContainer.new()
+	reveal_panel.visible = false
+	reveal_panel.set_anchors_preset(Control.PRESET_CENTER)
+	reveal_panel.custom_minimum_size = Vector2(560, 0)
+	layer.add_child(reveal_panel)
+	reveal_lbl = _label(24, HORIZONTAL_ALIGNMENT_CENTER)
+	reveal_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+	reveal_panel.add_child(reveal_lbl)
+
+	# Overlay fin de partie.
+	over_panel = PanelContainer.new()
+	over_panel.visible = false
+	over_panel.set_anchors_preset(Control.PRESET_CENTER)
+	layer.add_child(over_panel)
+	var vb := VBoxContainer.new()
+	over_panel.add_child(vb)
+	over_lbl = _label(30, HORIZONTAL_ALIGNMENT_CENTER)
+	vb.add_child(over_lbl)
+	var back_btn := _button("Retour au menu", vb)
+	back_btn.pressed.connect(func() -> void:
+		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
+
+func _label(size: int, align: HorizontalAlignment) -> Label:
+	var l := Label.new()
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	l.add_theme_constant_override("shadow_offset_x", 2)
+	l.add_theme_constant_override("shadow_offset_y", 2)
+	l.horizontal_alignment = align
+	return l
+
+func _button(text: String, parent: Container) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.custom_minimum_size = Vector2(0, 64)
+	b.add_theme_font_size_override("font_size", 26)
+	parent.add_child(b)
+	return b
+
+func _process(delta: float) -> void:
+	sway_t += delta
+	cam.rotation.y += sin(sway_t * 0.6) * 0.00005
+	cam.rotation.x += cos(sway_t * 0.45) * 0.00004
+
+# ---- Scène : décor, table, caméra, tomate (identiques au proto) ----
 
 func _environment() -> void:
 	var env := Environment.new()
@@ -166,32 +570,6 @@ func _table() -> void:
 	leg.height = 0.75
 	add_child(_mesh(leg, Color(0.3, 0.18, 0.09), Vector3(0, 0.375, 0), 0.6))
 
-	var felt_body := StaticBody3D.new()
-	var felt_col := CollisionShape3D.new()
-	var felt_shape := CylinderShape3D.new()
-	felt_shape.radius = TABLE_RADIUS
-	felt_shape.height = 0.06
-	felt_col.shape = felt_shape
-	felt_body.position.y = 0.75
-	var felt_pm := PhysicsMaterial.new()
-	felt_pm.friction = 1.0
-	felt_pm.bounce = 0.05
-	felt_body.physics_material_override = felt_pm
-	felt_body.add_child(felt_col)
-	add_child(felt_body)
-
-	var ring_body := StaticBody3D.new()
-	for i in 20:
-		var seg := CollisionShape3D.new()
-		var sb := BoxShape3D.new()
-		sb.size = Vector3(0.38, 0.4, 0.05)
-		seg.shape = sb
-		var a := TAU * i / 20.0
-		seg.position = Vector3(cos(a) * (TABLE_RADIUS + 0.03), 0.95, sin(a) * (TABLE_RADIUS + 0.03))
-		seg.rotation.y = -a + PI / 2.0
-		ring_body.add_child(seg)
-	add_child(ring_body)
-
 func _cup_mesh() -> MeshInstance3D:
 	var cm := CylinderMesh.new()
 	cm.top_radius = 0.08
@@ -200,128 +578,11 @@ func _cup_mesh() -> MeshInstance3D:
 	cm.radial_segments = 24
 	return _mesh(cm, Color(0.4, 0.23, 0.1), Vector3.ZERO, 0.55)
 
-func _characters() -> void:
-	var skins := [Color(0.95, 0.78, 0.6), Color(0.85, 0.62, 0.42), Color(0.98, 0.85, 0.7), Color(0.7, 0.5, 0.35), Color(0.92, 0.72, 0.55)]
-	var shirts := [Color(0.2, 0.5, 0.85), Color(0.85, 0.3, 0.25), Color(0.2, 0.65, 0.3), Color(0.9, 0.75, 0.2), Color(0.55, 0.3, 0.7)]
-	var hairs := [Color(0.2, 0.12, 0.06), Color(0.5, 0.32, 0.15), Color(0.1, 0.1, 0.1), Color(0.75, 0.55, 0.2), Color(0.35, 0.2, 0.1)]
-	var angles := [215.0, 242.5, 270.0, 297.5, 325.0]
-
-	for i in angles.size():
-		var a := deg_to_rad(angles[i])
-		var pos := Vector3(cos(a) * 1.6, 0, sin(a) * 1.6)
-		var mii := Mii.build(skins[i], shirts[i], hairs[i], i == 2, randi_range(0, 5), randi_range(0, 3))
-		mii.position = pos
-		mii.rotation.y = atan2(-pos.x, -pos.z)
-		add_child(mii)
-		miis.append(mii)
-
-		var opp_cup := _cup_mesh()
-		var cup_pos := Vector3(cos(a) * 0.98, TABLE_TOP_Y + 0.085, sin(a) * 0.98)
-		opp_cup.position = cup_pos
-		opp_cup.rotation.y = randf_range(0, TAU)
-		add_child(opp_cup)
-
-func _player_cup_dice() -> void:
-	cup = _cup_mesh()
-	cup.position = cup_home
-	add_child(cup)
-
-	var offsets := [
-		Vector3(-0.022, 0, -0.022), Vector3(0.022, 0, -0.022),
-		Vector3(-0.022, 0, 0.022), Vector3(0.022, 0, 0.022),
-		Vector3(0, 0, 0),
-	]
-	for i in 5:
-		var d := Die.build()
-		var home: Vector3 = cup_home + offsets[i]
-		home.y = TABLE_TOP_Y + Die.SIZE / 2.0 + 0.001
-		dice_home.append(home)
-		d.position = home
-		d.freeze = true
-		dice.append(d)
-		add_child(d)
-
-	var skin := Color(0.95, 0.78, 0.6)
-	for side in [-1.0, 1.0]:
-		var hand := MeshInstance3D.new()
-		var hs := SphereMesh.new()
-		hs.radius = 0.045
-		hs.height = 0.09
-		hs.material = mat(skin, 0.55)
-		hand.mesh = hs
-		hand.position = Vector3(side * 0.45, TABLE_TOP_Y + 0.03, 1.3)
-		add_child(hand)
-
 func _camera() -> void:
 	cam = Camera3D.new()
 	cam.fov = 70.0
 	add_child(cam)
 	cam.look_at_from_position(Vector3(0, 1.55, 3.0), Vector3(0, 0.82, -0.3))
-
-func _hud() -> void:
-	var layer := CanvasLayer.new()
-	var label := Label.new()
-	label.text = "Espace / Tap : lancer les dés"
-	label.add_theme_font_size_override("font_size", 26)
-	label.add_theme_color_override("font_color", Color.WHITE)
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
-	label.add_theme_constant_override("shadow_offset_x", 2)
-	label.add_theme_constant_override("shadow_offset_y", 2)
-	label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	label.position.y = 24
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	layer.add_child(label)
-	add_child(layer)
-
-func _process(delta: float) -> void:
-	sway_t += delta
-	cam.rotation.y += sin(sway_t * 0.6) * 0.00005
-	cam.rotation.x += cos(sway_t * 0.45) * 0.00004
-	if _shot:
-		_frames += 1
-		if _frames == 15:
-			var img0 := get_viewport().get_texture().get_image()
-			img0.save_png("/tmp/doodoo_racked.png")
-		elif _frames == 30:
-			_lift_and_throw()
-		elif _frames == 90:
-			_throw_tomato(miis[2])
-		elif _frames == 150:
-			var img := get_viewport().get_texture().get_image()
-			img.save_png("/tmp/doodoo_proto.png")
-			get_tree().quit()
-
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
-		if not busy:
-			if thrown:
-				_rack()
-			else:
-				_lift_and_throw()
-		return
-
-	var pos := Vector2.ZERO
-	var pressed := false
-	if event is InputEventScreenTouch and event.pressed:
-		pos = event.position
-		pressed = true
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		pos = event.position
-		pressed = true
-	if not pressed:
-		return
-
-	var from := cam.project_ray_origin(pos)
-	var to := from + cam.project_ray_normal(pos) * 10.0
-	var query := PhysicsRayQueryParameters3D.create(from, to)
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty() and hit.collider.has_meta("mii"):
-		_throw_tomato(hit.collider.get_meta("mii"))
-	elif not busy:
-		if thrown:
-			_rack()
-		else:
-			_lift_and_throw()
 
 func _make_splat_texture() -> ImageTexture:
 	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
@@ -393,42 +654,4 @@ func _tomato_impact(mii: Mii, tomato: MeshInstance3D, at: Vector3) -> void:
 
 	mii.set_face(3)
 	mii.play_flinch()
-	get_tree().create_timer(3.0).timeout.connect(func(): mii.set_face(mii._face))
-
-func _lift_and_throw() -> void:
-	busy = true
-	var twn := create_tween()
-	twn.tween_property(cup, "position:y", cup_home.y + 0.4, 0.35).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	twn.tween_callback(_throw_dice)
-	twn.tween_interval(0.4)
-	twn.tween_property(cup, "position", cup_home + Vector3(0.28, 0, -0.05), 0.3)
-	twn.tween_callback(_finish_throw)
-
-func _throw_dice() -> void:
-	for d in dice:
-		d.freeze = false
-		var dir := Vector3(randf_range(-0.55, 0.55), 0, -1.0).normalized()
-		d.linear_velocity = dir * randf_range(0.5, 1.1) + Vector3(0, randf_range(0.35, 0.75), 0)
-		d.angular_velocity = Vector3(randf_range(-18, 18), randf_range(-14, 14), randf_range(-18, 18))
-
-func _finish_throw() -> void:
-	thrown = true
-	busy = false
-
-func _rack() -> void:
-	busy = true
-	var twn := create_tween()
-	twn.tween_property(cup, "position", Vector3(0, cup_home.y + 0.4, 1.05), 0.3)
-	for i in dice.size():
-		var d := dice[i]
-		d.freeze = true
-		d.linear_velocity = Vector3.ZERO
-		d.angular_velocity = Vector3.ZERO
-		d.rotation = Vector3.ZERO
-		twn.parallel().tween_property(d, "global_position", dice_home[i], 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
-	twn.tween_property(cup, "position", cup_home, 0.3)
-	twn.tween_callback(_finish_rack)
-
-func _finish_rack() -> void:
-	thrown = false
-	busy = false
+	get_tree().create_timer(3.0).timeout.connect(func() -> void: mii.set_face(mii._face))
