@@ -8,7 +8,7 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 
 ## 1. Direction artistique
 
-- **Référence cible : Wii Party / Wii Sports** — vue première personne attablée, personnages ronds type Mii, salon chaleureux la nuit, table en feutrine, gobelets en cuir.
+- **Référence cible : Wii Party / Wii Sports** — vue première personne attablée, personnages ronds type Mii, salon chaleureux la nuit, table en feutrine, gobelets en cuir. Capture de référence : `inspiration/Partie de Perudo autour de la table.png`.
 - **Ton** : cartoon, chaleureux, familier. Pas de réalisme : géométrie low-poly lissée, couleurs quasi unies, visages simples et expressifs.
 - **Rendu** : 3D temps réel, mobile-first, **portrait verrouillé** (v1). HUD 2D superposé (boutons d'action, chat) — cf. spec fonctionnelle §7.
 - Le « polish Wii » vient de trois piliers : **éclairage doux** (ambiance chaude, peu de sources), **animations snappy** (squash-and-stretch, réactions expressives), **cohérence des formes/couleurs** partout.
