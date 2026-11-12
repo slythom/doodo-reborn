@@ -36,8 +36,15 @@ func _ready() -> void:
 		_pending = "")
 	Net.room_state.connect(_on_view)
 	Net.net_error.connect(func(c: String, m: String) -> void: _status.text = "[%s] %s" % [c, m])
-	Net.connection_closed.connect(func() -> void: _status.text = "connexion perdue")
+	Net.connection_closed.connect(func() -> void: _status.text = "connexion perdue — reconnexion…")
 	Net.notice_msg.connect(_on_notice)
+	if _name_edit.text == "":
+		_name_edit.text = Net.last_name
+	# Retour au menu avec connexion active (depuis la partie) : resync serveur.
+	if Net.is_open():
+		Net.hello()
+	elif not Net.view.is_empty():
+		_on_view(Net.view)
 
 func _build_ui() -> void:
 	var bg := ColorRect.new()

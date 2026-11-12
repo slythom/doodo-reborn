@@ -12,10 +12,13 @@ signal notice_msg(data: Dictionary)
 signal net_error(code: String, message: String)
 
 const URL := "ws://localhost:8080/ws"
-const CFG := "user://session.cfg"
+# DOODO_PROFILE permet plusieurs instances sur la même machine (jetons
+# distincts, sinon la seconde vole la session de la première).
+var CFG: String = "user://session%s.cfg" % OS.get_environment("DOODO_PROFILE")
 
 var ws: WebSocketPeer
 var token := ""
+var last_name := ""
 var view := {}
 var _was_open := false
 
@@ -54,6 +57,13 @@ func _process(_dt: float) -> void:
 			_was_open = false
 			set_process(false)
 			connection_closed.emit()
+			_auto_reconnect()
+
+# Reconnexion auto : le serveur garde le siège 60 s (jeton invité).
+func _auto_reconnect() -> void:
+	await get_tree().create_timer(1.5).timeout
+	if not is_open():
+		connect_server()
 
 func _on_packet(txt: String) -> void:
 	var env = JSON.parse_string(txt)
@@ -85,7 +95,10 @@ func _send(d: Dictionary) -> void:
 
 # ---- Commandes (miroir du protocole serveur) ----
 
-func hello(pseudo: String) -> void: _send({"type": "hello", "token": token, "name": pseudo})
+func hello(pseudo: String = "") -> void:
+	if pseudo != "":
+		last_name = pseudo
+	_send({"type": "hello", "token": token, "name": last_name})
 func create_room() -> void: _send({"type": "create"})
 func join_room(code: String) -> void: _send({"type": "join", "code": code.to_upper()})
 func quick_match() -> void: _send({"type": "quick"})
@@ -97,3 +110,4 @@ func emote(target_seat: int, kind: String) -> void: _send({"type": "emote", "tar
 func bid(quantity: int, value: int) -> void: _send({"type": "action", "action": "bid", "quantity": quantity, "value": value})
 func dudo() -> void: _send({"type": "action", "action": "dudo"})
 func calza() -> void: _send({"type": "action", "action": "calza"})
+func rematch() -> void: _send({"type": "rematch"})

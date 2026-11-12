@@ -33,6 +33,8 @@ var reveal_panel: PanelContainer
 var reveal_lbl: Label
 var over_panel: PanelContainer
 var over_lbl: Label
+var rematch_btn: Button
+var action_bar: VBoxContainer
 
 static func mat(color: Color, roughness := 0.8, emission := false) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -67,36 +69,52 @@ func _ready() -> void:
 	Net.game_events.connect(_on_events)
 	Net.net_error.connect(func(_c: String, m: String) -> void: status_lbl.text = m)
 	Net.notice_msg.connect(_on_notice)
-	Net.connection_closed.connect(func() -> void: status_lbl.text = "connexion perdue")
+	Net.connection_closed.connect(func() -> void: status_lbl.text = "connexion perdue — reconnexion…")
+	Net.connection_opened.connect(func() -> void: Net.hello()) # re-join après reconnexion
 
 func _on_view(v: Dictionary) -> void:
 	view = v
+	var st: String = v.get("state", "")
+	if st == "lobby" or st == "cancelled": # revanche ou annulation → retour menu
+		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn")
+		return
 	_refresh()
 
 # ---- Construction des sièges depuis le snapshot ----
 
-# Angle d'un siège : moi face caméra ; les autres dans l'ordre horaire de ma
-# gauche (joueur suivant, offset 1 → 215°) vers ma droite (offset n-1 → 325°).
-func _seat_angle(offset: int) -> float:
-	if offset == 0:
-		return MY_SEAT_ANGLE
-	var n: int = view.players.size()
-	if n == 2:
+# Angle sur l'arc adverse : idx 0 → gauche (215°), total-1 → droite (325°).
+func _arc_angle(idx: int, total: int) -> float:
+	if total <= 1:
 		return ARC_CENTER
-	return ARC_LEFT + (offset - 1) * (ARC_RIGHT - ARC_LEFT) / float(n - 2)
+	return ARC_LEFT + idx * (ARC_RIGHT - ARC_LEFT) / float(total - 1)
 
 func _build_seats() -> void:
 	var n: int = view.players.size()
-	var my_seat: int = view.get("your_seat", 0)
+	var my_seat: int = view.get("your_seat", -1)
+	var is_spectator := my_seat < 0
 	var skins := [Color(0.95, 0.78, 0.6), Color(0.85, 0.62, 0.42), Color(0.98, 0.85, 0.7), Color(0.7, 0.5, 0.35), Color(0.92, 0.72, 0.55), Color(0.8, 0.6, 0.45)]
 	var shirts := [Color(0.2, 0.5, 0.85), Color(0.85, 0.3, 0.25), Color(0.2, 0.65, 0.3), Color(0.9, 0.75, 0.2), Color(0.55, 0.3, 0.7), Color(0.3, 0.7, 0.75)]
 	var hairs := [Color(0.2, 0.12, 0.06), Color(0.5, 0.32, 0.15), Color(0.1, 0.1, 0.1), Color(0.75, 0.55, 0.2), Color(0.35, 0.2, 0.1), Color(0.6, 0.6, 0.65)]
 
+	# En spectateur, tous les joueurs sont sur l'arc (triés par siège).
+	var plist: Array = view.players.duplicate()
+	if is_spectator:
+		plist.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.get("seat", 0)) < int(b.get("seat", 0)))
+
 	for i in n:
-		var p: Dictionary = view.players[i]
+		var p: Dictionary = plist[i]
 		var p_seat: int = p.get("seat", i)
-		var offset := (p_seat - my_seat + n) % n
-		var a := deg_to_rad(_seat_angle(offset))
+		var offset := -1 if is_spectator else (p_seat - my_seat + n) % n
+		var arc_idx: int
+		var arc_total := n - 1
+		if is_spectator:
+			arc_idx = i
+			arc_total = n
+		elif offset == 0:
+			arc_idx = -1 # moi : pas d'arc
+		else:
+			arc_idx = offset - 1
+		var a := deg_to_rad(MY_SEAT_ANGLE if offset == 0 else _arc_angle(arc_idx, arc_total))
 		var pos := Vector3(cos(a) * SEAT_RADIUS, 0, sin(a) * SEAT_RADIUS)
 		var seat := {}
 		seats[p_seat] = seat
@@ -249,6 +267,10 @@ func _legal(q: int, v: int) -> bool:
 	return q > cq or (q == cq and v > cv)
 
 func _update_actions() -> void:
+	var spectator: bool = view.get("your_seat", -1) < 0
+	action_bar.visible = not spectator and not view.get("over", false)
+	if spectator:
+		return
 	var my_turn: bool = view.get("turn", -1) == view.get("your_seat", -2) and not view.get("over", false)
 	bid_btn.disabled = not my_turn or not _legal(int(qty_spin.value), val_opt.selected + 1)
 	dudo_btn.disabled = not my_turn or not view.get("has_bid", false)
@@ -290,6 +312,7 @@ func _show_game_over(e: Dictionary) -> void:
 		var seat: int = e["ranking"][r]
 		lines.append("%d. %s" % [r + 1, _player_name(seat)])
 	over_lbl.text = "\n".join(lines)
+	rematch_btn.visible = view.get("your_seat", -1) >= 0 # joueurs seulement
 	over_panel.visible = true
 
 # ---- Emotes (tomate) : envoi optimiste + réception ----
@@ -319,11 +342,10 @@ func _on_notice(d: Dictionary) -> void:
 	match d.get("kind", ""):
 		"emote":
 			# ne pas rejouer notre propre emote (déjà animée en optimiste)
-			var my_name := _player_name(view.get("your_seat", -1))
-			if d.get("from", "") != my_name and d.get("text", "") == "tomato":
+			if d.get("from", "") != Net.last_name and d.get("text", "") == "tomato":
 				var seat := int(d.get("target", "-1"))
 				if seats.has(seat) and seats[seat].has("mii"):
-					_throw_tomato(seats[seat]["mii"])
+					_throw_tomato(seats[seat]["mii"], int(d.get("from_seat", -1)))
 		"chat":
 			status_lbl.text = "%s : %s" % [d.get("from", "?"), d.get("text", "")]
 
@@ -355,7 +377,8 @@ func _hud() -> void:
 	layer.add_child(status_lbl)
 
 	# Barre d'actions en bas : deux lignes pour tenir en portrait 720 px.
-	var bar := VBoxContainer.new()
+	action_bar = VBoxContainer.new()
+	var bar := action_bar
 	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.position.y = -170
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -421,8 +444,11 @@ func _hud() -> void:
 	over_panel.add_child(vb)
 	over_lbl = _label(30, HORIZONTAL_ALIGNMENT_CENTER)
 	vb.add_child(over_lbl)
+	rematch_btn = _button("Revanche", vb)
+	rematch_btn.pressed.connect(func() -> void: Net.rematch())
 	var back_btn := _button("Retour au menu", vb)
 	back_btn.pressed.connect(func() -> void:
+		Net.leave()
 		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
 
 func _label(size: int, align: HorizontalAlignment) -> Label:
@@ -592,7 +618,7 @@ func _make_splat_texture() -> ImageTexture:
 		Die._fill_circle(img, c, randi_range(7, 16), Color(0.8, 0.1, 0.05, 0.95))
 	return ImageTexture.create_from_image(img)
 
-func _throw_tomato(mii: Mii) -> void:
+func _throw_tomato(mii: Mii, from_seat := -1) -> void:
 	var tomato := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.055
@@ -601,7 +627,15 @@ func _throw_tomato(mii: Mii) -> void:
 	tomato.mesh = sm
 	add_child(tomato)
 
+	# Origine : mes mains si c'est moi (ou un spectateur « dans les tribunes »),
+	# sinon la main du lanceur (son Mii, légèrement vers la table).
 	var p0 := Vector3(0, 1.15, 2.5)
+	if from_seat >= 0 and from_seat != view.get("your_seat", -2) \
+			and seats.has(from_seat) and seats[from_seat].has("mii"):
+		var fm: Mii = seats[from_seat]["mii"]
+		var inward := -fm.global_position
+		inward.y = 0
+		p0 = fm.global_position + Vector3(0, 1.25, 0) + inward.normalized() * 0.3
 	var p2: Vector3 = mii.global_position + Vector3(0, 1.32, 0.05)
 	var mid := (p0 + p2) / 2.0 + Vector3(0, 0.8, 0)
 	var twn := create_tween()

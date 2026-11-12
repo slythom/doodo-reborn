@@ -81,6 +81,7 @@ doodo-reborn/
 - **Déconnexion** : joueur marqué `disconnected` (badge diffusé) + deadline 60 s ; pendant ce délai, remplacement bot ou élimination selon l'option de table ; le jeton invité ré-identifie le joueur au retour → reprise du siège si la partie n'est pas finie.
 - **Matchmaking** : file in-memory ; à 60 s → remplissage bots automatique (§3.3).
 - **Persistance v1.5** : `internal/store` + SQLite ; schéma : comptes, jetons invités, stats agrégées. Parties non classées (`ranked_safe:false`, mode dieu) exclues.
+- **Point ouvert — collision de jetons** : aujourd'hui un `hello` avec un jeton déjà associé à une connexion vivante **vole silencieusement la session** (les deux clients reçoivent alors la même vue / se disputent le routage). Inoffensif en prod (jeton 128 bits aléatoire, un device = un jeton) mais à durcir avant v1.5 : au `hello`, si le jeton a une conn vivante → ping de celle-ci ; si elle répond → nouveau jeton pour le nouvel arrivant (identité distincte), sinon → reprise normale (conn zombie). + garder `conns[token] = c` dans `onClose` sous condition (ne pas effacer l'entrée si la conn a été remplacée). *Dev : tester plusieurs instances locales via `DOODO_PROFILE=<id>` (fichier session séparé).*
 
 ---
 

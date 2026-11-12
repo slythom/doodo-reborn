@@ -193,6 +193,118 @@ func TestSpectatorJoinDuringGame(t *testing.T) {
 	clk.fire(500)
 }
 
+func TestSpectatorLeaveDuringGame(t *testing.T) {
+	r, clk, _ := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+	r.Join(&Member{ID: "u3", Name: "spec"}) // arrive en partie → spectateur
+	if len(r.spectators) != 1 {
+		t.Fatalf("spectateurs=%d, want 1", len(r.spectators))
+	}
+	r.Leave("u3")
+	if len(r.spectators) != 0 {
+		t.Errorf("spectateurs=%d, want 0 après départ", len(r.spectators))
+	}
+	if len(r.players) != 2 {
+		t.Errorf("players=%d, want 2", len(r.players))
+	}
+	clk.fire(500)
+}
+
+func TestEliminatedLeaveStaysInRoster(t *testing.T) {
+	r, clk, _ := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+	// Bob éliminé à la main puis quitte : il doit rester dans le roster
+	// (déconnecté) pour que son nom survive dans la vue/le classement.
+	seat := r.seatOfLocked("u2")
+	r.game.Players[seat].Alive = false
+	r.game.Players[seat].DiceCount = 0
+	r.Leave("u2")
+	if len(r.players) != 2 {
+		t.Errorf("players=%d, want 2 (éliminé conservé)", len(r.players))
+	}
+	v := r.viewForLocked(r.memberLocked("u1"))
+	found := false
+	for _, pv := range v.Players {
+		if pv.Name == "bob" && pv.DiceCount == 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("l'éliminé parti doit rester visible (nom, 0 dé) dans la vue")
+	}
+	clk.fire(500)
+}
+
+func TestLeaveInFinishedState(t *testing.T) {
+	r, clk, _ := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+	r.State = "finished"
+	if destroy := r.Leave("u2"); destroy {
+		t.Error("il reste u1 : la room ne doit pas être détruite")
+	}
+	if len(r.players) != 1 {
+		t.Errorf("players=%d, want 1", len(r.players))
+	}
+	clk.fire(500)
+}
+
+func TestRematchPlayersOnly(t *testing.T) {
+	r, clk, _ := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+	r.Join(&Member{ID: "u3", Name: "spec"}) // spectateur
+	r.State = "finished"
+	if err := r.Rematch("u3"); err != ErrPlayersOnly {
+		t.Errorf("spectateur rematch: err=%v, want ErrPlayersOnly", err)
+	}
+	if err := r.Rematch("u1"); err != nil {
+		t.Fatalf("joueur rematch: err=%v", err)
+	}
+	if r.State != "lobby" {
+		t.Errorf("state=%s, want lobby", r.State)
+	}
+	clk.fire(500)
+}
+
+func TestDiceCountStaysDownAcrossRounds(t *testing.T) {
+	r, clk, s := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+	// Le joueur de tour surestime volontairement, l'autre doute :
+	// l'enchérisseur perd un dé — et ne doit JAMAIS le regagner sans calza.
+	turn := r.game.Turn
+	bidder := r.seats[turn].ID
+	caller := "u1"
+	if bidder == "u1" {
+		caller = "u2"
+	}
+	if err := r.Act(bidder, game.Action{Type: game.ActionBid, Bid: game.Bid{Quantity: 20, Value: 6}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Act(caller, game.Action{Type: game.ActionDudo}); err != nil {
+		t.Fatal(err)
+	}
+	views := s.viewsFor(bidder)
+	if len(views) == 0 {
+		t.Fatal("pas de snapshot reçu")
+	}
+	last := views[len(views)-1]
+	for _, pv := range last.Players {
+		if pv.Seat == turn {
+			if pv.DiceCount != 2 {
+				t.Errorf("dice_count=%d après perte, want 2", pv.DiceCount)
+			}
+			if len(pv.Dice) != 2 {
+				t.Errorf("len(dice)=%d après relance, want 2", len(pv.Dice))
+			}
+		}
+	}
+	clk.fire(500)
+}
+
 func TestPlayerSeesOnlyOwnDice(t *testing.T) {
 	r, clk, s := newRoom(t)
 	r.Join(&Member{ID: "u2", Name: "bob"})

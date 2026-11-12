@@ -10,6 +10,7 @@ package room
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ var (
 	ErrNoSpectators   = errors.New("room: spectateurs désactivés sur cette table")
 	ErrNoSuchPlayer   = errors.New("room: joueur introuvable")
 	ErrNoSuchTarget   = errors.New("room: cible introuvable")
+	ErrPlayersOnly    = errors.New("room: action réservée aux joueurs")
 	ErrCannotKickSelf = errors.New("room: l'hôte ne peut pas s'expulser")
 )
 
@@ -227,19 +229,28 @@ func (r *Room) Launch(byID string) error {
 }
 
 // Rematch ramène la table en salle d'attente avec les mêmes options (§4.4).
-func (r *Room) Rematch() {
+// Réservé aux joueurs — les spectateurs regardent, ils ne décident pas.
+func (r *Room) Rematch(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.State != "finished" {
-		return
+		return nil
+	}
+	m := r.memberLocked(id)
+	if m == nil {
+		return ErrNoSuchPlayer
+	}
+	if _, spec := r.spectators[m.ID]; spec {
+		return ErrPlayersOnly
 	}
 	r.game = nil
 	r.seats = nil
 	r.State = "lobby"
-	for _, m := range r.players {
-		m.ReplacedByBot = false
+	for _, p := range r.players {
+		p.ReplacedByBot = false
 	}
 	r.broadcastLocked()
+	return nil
 }
 
 // ---- En jeu ----
@@ -270,6 +281,13 @@ func (r *Room) afterGameEventsLocked(evs []game.Event) {
 	for _, e := range evs {
 		if e.Type == game.EvReveal {
 			reveal = true
+		}
+		if e.Type != game.EvBid {
+			pname := ""
+			if e.Player >= 0 && e.Player < len(r.seats) && r.seats[e.Player] != nil {
+				pname = r.seats[e.Player].Name
+			}
+			slog.Info("game event", "room", r.Code, "type", e.Type, "player", pname, "bid", e.Bid, "count", e.Count)
 		}
 		if e.Type == game.EvEliminated {
 			if m := r.seats[e.Player]; m != nil && !m.Bot {
@@ -386,9 +404,19 @@ func (r *Room) Leave(id string) bool {
 			evs := r.game.Abandon(seat)
 			r.afterGameEventsLocked(evs)
 		} else {
+			if seat < 0 {
+				r.removeLocked(m) // spectateur : simple départ
+			}
+			// éliminé : reste dans le roster (déconnecté) pour la vue/classement
 			r.broadcastLocked()
 		}
 		r.checkHumansLocked()
+		return r.humanCountLocked() == 0
+	}
+	if r.State == "finished" {
+		r.removeLocked(m)
+		r.transferHostLocked()
+		r.broadcastLocked()
 		return r.humanCountLocked() == 0
 	}
 	return false
@@ -406,8 +434,9 @@ func (r *Room) Emote(id, targetSeat, kind string) {
 	if m == nil || !validEmotes[kind] {
 		return
 	}
+	fromSeat := r.seatOfLocked(id) // -1 si spectateur
 	r.emitLocked(nil, protocol.Envelope{Type: "notice", Data: protocol.Notice{
-		Kind: "emote", From: m.Name, Text: kind, Target: targetSeat,
+		Kind: "emote", From: m.Name, Text: kind, Target: targetSeat, FromSeat: &fromSeat,
 	}})
 }
 

@@ -162,9 +162,7 @@ func (h *Hub) dispatch(c *conn, s *session, m protocol.ClientMsg) {
 	case "kick":
 		h.roomCall(c, s, func(r *room.Room) error { return r.Kick(s.token, m.Target) })
 	case "rematch":
-		if s.room != nil {
-			s.room.Rematch()
-		}
+		h.roomCall(c, s, func(r *room.Room) error { return r.Rematch(s.token) })
 	case "action":
 		h.gameAction(c, s, m)
 	case "chat":
@@ -177,6 +175,13 @@ func (h *Hub) dispatch(c *conn, s *session, m protocol.ClientMsg) {
 		}
 	case "leave":
 		h.leave(s)
+	case "hello":
+		// Idempotent : re-welcome + resync room_state (retour au menu,
+		// snapshot perdu côté client…). Le token de session est conservé.
+		if s.room != nil && s.member != nil {
+			s.room.Reconnected(s.member)
+		}
+		h.deliver(c, protocol.Envelope{Type: "welcome", Data: protocol.Welcome{Token: s.token, Name: s.name}})
 	default:
 		h.sendErr(c, "unknown_type", "type de message inconnu: "+m.Type)
 	}
