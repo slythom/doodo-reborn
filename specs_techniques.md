@@ -94,7 +94,7 @@ doodo-reborn/
 - **Exports** : preset Android (SDK requis) ; iOS via Xcode — **nécessite un Mac** (à provisionner avant v1.5 : machine ou CI macos).
 - **Absorber le proto** : `prototype/` devient la base de `client/` (Miis, table, interactions déjà validées).
 
-*Acté : révélation Dudo/Calza en **écran 2D dédié** (overlay au-dessus de la scène 3D ; cf. specs_artistiques §7 — lisibilité du décompte, dés alignés).*
+*Acté : révélation Dudo/Calza en **écran 2D dédié** (overlay au-dessus de la scène 3D ; cf. specs_artistiques §7 — charte UI : dés alignés, comptage animé).*
 
 ---
 
