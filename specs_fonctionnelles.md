@@ -59,6 +59,7 @@ Le créateur de la partie choisit avant le lancement. Les options sont **figées
 | Nombre max de joueurs | 2 à 6 | 6 |
 | Remplacement par bot après déconnexion | oui / non | oui |
 | Spectateurs & chat spectateurs | oui / non | oui |
+| Scène / décor 3D | `salon` (défaut) + scènes ajoutées au fil des versions — choisie en salle d'attente, figée au lancement | `salon` |
 | Règles personnalisées | toggles individuels (cf. §1.5) | toutes off |
 | Mode dieu | oui / non — **salles privées uniquement** | non — rend la partie non classée |
 
@@ -148,7 +149,7 @@ Trois points d'entrée, tous disponibles en v1 :
 
 - Liste des joueurs présents et options de la table (modifiables par le créateur uniquement, jusqu'au lancement).
 - **Chat de salle en texte libre** (salles privées : entre amis, pas de modération en v1).
-- Le créateur peut : ajouter/retirer des bots, expulser un joueur (ban pour la durée de la table), basculer publique/privée, lancer la partie.
+- Le créateur peut : ajouter/retirer des bots, expulser un joueur (ban pour la durée de la table), basculer publique/privée, **choisir la scène/décor 3D** (§1.3), lancer la partie.
 - **Départ du créateur en salle** : l'hosting est transféré au joueur humain le plus ancien ; s'il ne reste que des bots ou plus personne, la salle se ferme.
 
 ### 4.2 En jeu

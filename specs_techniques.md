@@ -63,7 +63,7 @@ doodo-reborn/
 ## 4. Protocole réseau
 
 - **WebSocket**, un canal par joueur/spectateur. Payload **JSON** *(acté)* : lisible, debuggable ; binaire seulement si un problème de perf apparaît (peu probable à cette échelle).
-- **Client → serveur (commandes)** : `hello` (pseudo+jeton), `create_room` (options), `join` (code/file), `ready/launch`… en partie : `bid` (X,V), `dudo`, `calza`, `chat` (id message/emote), `leave`, `tap_emote` (cible, type — ex. tomate).
+- **Client → serveur (commandes)** : `hello` (pseudo+jeton), `create_room` (options : dés, paco, timer… + `scene` = id du décor, validé serveur, fallback `salon`), `join` (code/file), `ready/launch`… en partie : `bid` (X,V), `dudo`, `calza`, `chat` (id message/emote), `leave`, `tap_emote` (cible, type — ex. tomate).
 - **Serveur → client (états/événements)** : `room_state` (snapshot), `round_started` (tes dés), `bid_made`, `reveal` (dés de tous + résultat), `dice_lost`, `player_eliminated`, `game_over` (classement), `emote` (auteur, cible, type), `error` (code, message).
 - **Règles du protocole** : toute action est validée serveur (tour, légalité d'enchère §1.2) ; le client affiche seulement ce que son rôle autorise.
 - Schémas formalisés dans `shared/` (JSON Schema ou simple doc + types Go/generation côté client plus tard).
@@ -95,6 +95,12 @@ doodo-reborn/
 - **Absorber le proto** : `prototype/` devient la base de `client/` (Miis, table, interactions déjà validées).
 
 *Acté : révélation Dudo/Calza en **écran 2D dédié** (overlay au-dessus de la scène 3D ; cf. specs_artistiques §7 — charte UI : dés alignés, comptage animé).*
+
+- **Décors 3D** : `view.scene` (id en `room_state`, choisi par le créateur en salle d'attente, figé au lancement) dispatche sur un **builder de décor** — même approche que la table actuelle : primitives + matériaux en code GDScript, ou `.glb` généré si le décor l'exige. Id inconnu (vieux client) → `salon`.
+
+*⚠️ État actuel vs cible : les §§4-6 décrivent l'architecture visée (`client/`, scènes `Lobby`/`RoomView`/`Game3D`, `net/WsClient`+`GameState`, `shared/`). Le prototype réel = `prototype/menu.gd` + `main.gd` (UI 2D et scène 3D construites en code), autoload `net.gd` (WsClient et GameState fusionnés), Miis procéduraux, ni `shared/` ni `.glb` chargé. À réaligner — doc ou code — quand le proto devient `client/`.*
+
+*Évolution prévue de `net.gd` (quand les premiers tests client ou la reconnexion+resync arriveront — pas bloquant pour la feature « scènes ») : garder `Net` en autoload/façade mince (`Net.view`, signaux inchangés) qui délègue en interne à deux `RefCounted` — `WsClient` (socket, JSON, reconnexion, session) et `GameState` (`apply(packet) → signaux`, tient `view`). But : `GameState` testable headless sans socket (`state.apply(fake_dict)`) ; zéro impact sur les appels existants. Aucun enjeu de performance : la séparation est un gain de testabilité, pas de vitesse.*
 
 ---
 

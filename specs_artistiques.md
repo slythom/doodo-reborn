@@ -28,9 +28,21 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 
 ## 3. Environnement
 
-- **Salon intérieur la nuit** : murs beige chaud, sol bois, grande fenêtre à ciel nocturne derrière les adversaires (détail : gratte-ciels lumineux envisageables), plantes, cadres, appliques murales.
-- **Table** : feutrine verte + rebord bois ; un gobelet en cuir par joueur ; les dés du joueur visibles sous son propre gobelet.
-- **Éclairage** : une lumière principale chaude au-dessus de la table (seule source d'ombres), appoints d'ambiance, lumière froide discrète côté fenêtre.
+*Le décor n'est **pas unique** : plusieurs scènes 3D, choisies par le créateur de la table en salle d'attente (spec fonctionnelle §1.3/§4.1), figées au lancement — jamais modifiables en cours de partie. `salon` est la scène **par défaut** et le **fallback** (id inconnu → salon). Les scènes peuvent être radicalement différentes ; seul le contrat ci-dessous est garanti.*
+
+### Contrat commun (toute scène le respecte)
+
+- **Table ronde centrée** : un gobelet posé par joueur sur le tapis.
+- **Sièges en arc** face caméra pour les adversaires ; le joueur local en **vue subjective** au bord proche — ni Mii ni mains rendus (retirés pour lisibilité), son gobelet reste posé sur la table.
+- **Caméra fixe portrait**, légèrement plongée sur la table — pas de contrôle caméra en v1.
+- **Lumière principale au-dessus de la table** (seule source d'ombres portées) ; appoints libres.
+- **Budget perf §6 inchangé** quelle que soit la scène ; le HUD 2D et les overlays ne dépendent pas du décor.
+- Hors ce contrat : **liberté totale** (murs, ciel, props, ambiance, variantes de Mii…).
+
+### Catalogue de scènes
+
+- **`salon` — salon intérieur la nuit (défaut + fallback)** : murs beige chaud, sol bois, grande fenêtre à ciel nocturne derrière les adversaires (détail : gratte-ciels lumineux envisageables), plantes, cadres, appliques murales. Table : feutrine verte + rebord bois, **piètement en fonte sombre métallique** (distinct du bois des gobelets). Éclairage chaud au-dessus de la table, appoints d'ambiance, lumière froide discrète côté fenêtre.
+- *Scènes futures : à définir — chacune documentée ici en respectant le contrat ci-dessus.*
 
 ## 4. Animations & interactions
 
@@ -75,6 +87,20 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 | Couleurs joueur | bleu `#2E8BE6` · rouge `#E64A3C` · vert `#3FAF49` · jaune `#F5C518` · violet `#8E5BB5` · orange `#F28C28` | chips pseudo + badge compteur de dés (par siège) |
 | Pips des dés | `#232B40` | faces de dés (ivoire `#FFFFFF`) |
 
+### Mode sombre
+
+*Switch « Mode sombre » en bas de la carte d'accueil — pill + knob animé avec icône soleil/lune. Préférence persistée (`user://settings.cfg`), appliquée à tous les écrans 2D. Les accents (bleu Wii, Dudo, Calza, orange, couleurs joueur, pips) sont **identiques** dans les deux thèmes ; l'écran de révélation reste « night club » dans les deux cas ; la scène 3D ne suit pas le thème.*
+
+| Rôle | Clair | Sombre |
+|---|---|---|
+| Fond | `#EEF2F7` | `#131A29` |
+| Panneau | `#FFFFFF` | `#202B3E` |
+| Bordure | `#DDE3EB` | `#34425C` |
+| Biseau bouton | `#D3D9E1` | `#151D2E` |
+| Texte | `#3C4048` | `#E9EEF8` |
+| Texte secondaire | `#8A919E` | `#8C97AB` |
+| Trame de pois | encre 7 % | blanc 5 % |
+
 ### Typographie
 
 - **Fredoka** (SIL OFL, variable wght) — display : titres, badges, chiffres d'enchère, « DUDO ! ». Ronde et grasse, c'est l'ADN Wii.
@@ -86,11 +112,12 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 
 - **Boutons « soft plastic »** : fond uni, radius 18, **biseau inférieur 3 px** de la teinte sombre de la variante ; pressé = biseau réduit à 1 px + teinte assombrie ; désactivé = opacité 45 %.
 - Variantes : `primary` (bleu Wii plein, texte blanc), `btn` (blanc cassé, texte encre — secondaire/neutre), `dudo` (rouge), `calza` (vert).
-- **Cibles tactiles ≥ 48 px** partout (≈56 px boutons, 46 px icônes de faces).
+- **Cibles tactiles ≥ 48 px** partout (≈56 px boutons, 48 px icônes de faces — même hauteur que le stepper de quantité).
 - **Panneaux** : blancs, radius 20, bordure `#DDE3EB` + biseau léger.
 - **Chips joueur** : pill couleur du siège, pseudo blanc — un joueur = une couleur partout (scène, chip, badge).
 - **Champs de saisie** : fond blanc, bord 2 px clair ; focus → bord bleu Wii.
-- **Badge compteur de dés** : gros chiffre à la couleur du joueur posé au-dessus de son gobelet (Label3D) — lisible de loin, plus de texte « N dé(s) ».
+- **Badge compteur de dés** : badge circulaire à la couleur du joueur **au-dessus de sa pill pseudo**, le tout en billboard 2D au-dessus du Mii — lisible de loin, plus de texte « N dé(s) ».
+- **Joueur actif** : sa pill pseudo reçoit un **anneau blanc + halo** et pulse doucement (scale 1 → 1.09 en boucle).
 
 ### HUD (portrait, zones)
 
