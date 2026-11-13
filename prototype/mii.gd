@@ -46,6 +46,16 @@ func play_flinch() -> void:
 	f.tween_property(self, "scale:y", 1.0, 0.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	f.parallel().tween_property(self, "rotation:x", 0.0, 0.45)
 
+# Point d'accroche du splat de tomate (espace local du wrapper).
+func splat_anchor() -> Vector3:
+	return Vector3(0, 1.32, 0.16)
+
+# Parente le splat au wrapper — le recul du Mii anime le wrapper entier,
+# le décal reste donc collé au visage sans os à suivre.
+func attach_splat(splat: Node3D) -> void:
+	add_child(splat)
+	splat.position = splat_anchor()
+
 static func build(skin: Color, shirt: Color, hair: Color, glasses := false, hair_style := 0, face := 0) -> Mii:
 	var root := Mii.new()
 

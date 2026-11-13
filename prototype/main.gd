@@ -112,9 +112,8 @@ func _build_seats() -> void:
 	var n: int = UI.arr(view.get("players")).size()
 	var my_seat: int = view.get("your_seat", -1)
 	var is_spectator := my_seat < 0
-	var skins: Array = _scene.get("skins", SALON_SKINS)
-	var shirts: Array = _scene.get("shirts", SALON_SHIRTS)
-	var hairs: Array = _scene.get("hairs", SALON_HAIRS)
+	# Factory de personnage de la scène (défaut : Miis aux palettes salon).
+	var char_fn: Callable = _scene.get("char", _char_mii)
 
 	# En spectateur, tous les joueurs sont sur l'arc (triés par siège).
 	var plist: Array = UI.arr(view.get("players")).duplicate()
@@ -149,9 +148,9 @@ func _build_seats() -> void:
 			# Moi : dés visibles en 2D (vue subjective, pas de Mii).
 			continue
 
-		# Adversaire : Mii aux variantes déterministes (dérivées du nom).
+		# Adversaire : personnage de la scène (variantes dérivées du nom).
 		var h: int = abs(p.get("name", "?").hash())
-		var mii := Mii.build(skins[h % 6], shirts[(h / 6) % 6], hairs[(h / 36) % 6], h % 3 == 0, h % 6, h % 4)
+		var mii: Node3D = char_fn.call(h)
 		mii.position = pos
 		mii.rotation.y = atan2(-pos.x, -pos.z)
 		mii.set_meta("seat", p_seat)
@@ -638,7 +637,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or not hit.collider.has_meta("mii"):
 		return
-	var mii: Mii = hit.collider.get_meta("mii")
+	var mii: Node3D = hit.collider.get_meta("mii")
 	Net.emote(mii.get_meta("seat"), "tomato")  # le serveur diffuse aux autres
 	_throw_tomato(mii)                         # anim optimiste locale
 
@@ -985,11 +984,22 @@ const SALON_HAIRS: Array[Color] = [Color(0.2, 0.12, 0.06), Color(0.5, 0.32, 0.15
 var _scene: Dictionary = {} # entrée active du registry de décors
 
 # Registry des décors 3D (specs_artistiques §3). Chaque entrée :
-#   build: Callable                construit décor + table + caméra
-#   skins / shirts / hairs: Array  palettes Mii optionnelles (défaut salon)
+#   build: Callable          construit décor + table + caméra
+#   char: Callable(h) -> Node3D  personnage d'un siège (défaut _char_mii)
 # `salon` est le décor par défaut et le fallback : id inconnu → salon.
 func _scenes() -> Dictionary:
-	return {"salon": {"build": _scene_salon}}
+	return {
+		"salon": {"build": _scene_salon},
+		"salon_squelettes": {"build": _scene_salon, "char": _char_skeleton},
+	}
+
+# Mii aux palettes salon — référence ; une scène peut varier via `char`.
+func _char_mii(h: int) -> Node3D:
+	return Mii.build(SALON_SKINS[h % 6], SALON_SHIRTS[(h / 6) % 6],
+		SALON_HAIRS[(h / 36) % 6], h % 3 == 0, h % 6, h % 4)
+
+func _char_skeleton(h: int) -> Node3D:
+	return Skeleton.build(h % 4, h)
 
 func _build_scene() -> void:
 	var id := String(UI.obj(view.get("options")).get("scene", ""))
@@ -1150,7 +1160,7 @@ func _make_splat_texture() -> ImageTexture:
 		Die._fill_circle(img, c, randi_range(7, 16), Color(0.8, 0.1, 0.05, 0.95))
 	return ImageTexture.create_from_image(img)
 
-func _throw_tomato(mii: Mii, from_seat := -1) -> void:
+func _throw_tomato(mii: Node3D, from_seat := -1) -> void:
 	var tomato := MeshInstance3D.new()
 	var sm := SphereMesh.new()
 	sm.radius = 0.055
@@ -1164,7 +1174,7 @@ func _throw_tomato(mii: Mii, from_seat := -1) -> void:
 	var p0 := Vector3(0, 1.15, 2.5)
 	if from_seat >= 0 and from_seat != view.get("your_seat", -2) \
 			and seats.has(from_seat) and seats[from_seat].has("mii"):
-		var fm: Mii = seats[from_seat]["mii"]
+		var fm: Node3D = seats[from_seat]["mii"]
 		var inward := -fm.global_position
 		inward.y = 0
 		p0 = fm.global_position + Vector3(0, 1.25, 0) + inward.normalized() * 0.3
@@ -1177,7 +1187,7 @@ func _throw_tomato(mii: Mii, from_seat := -1) -> void:
 func _bezier_move(t: float, tomato: MeshInstance3D, p0: Vector3, mid: Vector3, p2: Vector3) -> void:
 	tomato.global_position = p0.lerp(mid, t).lerp(mid.lerp(p2, t), t)
 
-func _tomato_impact(mii: Mii, tomato: MeshInstance3D, at: Vector3) -> void:
+func _tomato_impact(mii: Node3D, tomato: MeshInstance3D, at: Vector3) -> void:
 	tomato.queue_free()
 
 	var ppm := ParticleProcessMaterial.new()
@@ -1214,8 +1224,11 @@ func _tomato_impact(mii: Mii, tomato: MeshInstance3D, at: Vector3) -> void:
 	sqm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sq.material = sqm
 	splat.mesh = sq
-	splat.position = Vector3(0, 1.32, 0.16)
-	mii.add_child(splat)
+	if mii.has_method("attach_splat"):
+		mii.attach_splat(splat)
+	else:
+		splat.position = Vector3(0, 1.32, 0.16)
+		mii.add_child(splat)
 	get_tree().create_timer(3.0).timeout.connect(splat.queue_free)
 
 	mii.set_face(3)
