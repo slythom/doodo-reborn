@@ -50,6 +50,10 @@ func play_flinch() -> void:
 func splat_anchor() -> Vector3:
 	return Vector3(0, 1.32, 0.16)
 
+# Point d'impact de la tomate (espace monde) — hauteur de visage Mii.
+func impact_point() -> Vector3:
+	return to_global(splat_anchor())
+
 # Parente le splat au wrapper — le recul du Mii anime le wrapper entier,
 # le décal reste donc collé au visage sans os à suivre.
 func attach_splat(splat: Node3D) -> void:

@@ -91,6 +91,15 @@ func _ready() -> void:
 	Net.notice_msg.connect(_on_notice)
 	Net.connection_closed.connect(func() -> void: _set_status("connexion perdue — reconnexion…"))
 	Net.connection_opened.connect(func() -> void: Net.hello()) # re-join après reconnexion
+	if OS.get_cmdline_user_args().has("--e2e"):
+		get_tree().create_timer(3.0).timeout.connect(_e2e_tomato)
+
+# e2e : lance une tomate sur le premier adversaire pour exercer impact/splat.
+func _e2e_tomato() -> void:
+	for seat in seats:
+		if seat != view.get("your_seat") and seats[seat].has("mii"):
+			_throw_tomato(seats[seat]["mii"])
+			return
 
 func _on_view(v: Dictionary) -> void:
 	view = v
@@ -991,7 +1000,23 @@ func _scenes() -> Dictionary:
 	return {
 		"salon": {"build": _scene_salon},
 		"cimetiere": {"build": _scene_graveyard, "char": _char_skeleton},
+		"foret": {"build": _scene_forest, "char": _char_adventurer},
 	}
+
+const SKEL_MODELS: Array = [
+	preload("res://assets/skeletons/Skeleton_Minion.glb"),
+	preload("res://assets/skeletons/Skeleton_Mage.glb"),
+	preload("res://assets/skeletons/Skeleton_Rogue.glb"),
+	preload("res://assets/skeletons/Skeleton_Warrior.glb"),
+]
+const ADV_MODELS: Array = [
+	preload("res://assets/adventurers/Barbarian.glb"),
+	preload("res://assets/adventurers/Knight.glb"),
+	preload("res://assets/adventurers/Mage.glb"),
+	preload("res://assets/adventurers/Ranger.glb"),
+	preload("res://assets/adventurers/Rogue.glb"),
+	preload("res://assets/adventurers/Rogue_Hooded.glb"),
+]
 
 # Mii aux palettes salon — référence ; une scène peut varier via `char`.
 func _char_mii(h: int) -> Node3D:
@@ -999,7 +1024,11 @@ func _char_mii(h: int) -> Node3D:
 		SALON_HAIRS[(h / 36) % 6], h % 3 == 0, h % 6, h % 4)
 
 func _char_skeleton(h: int) -> Node3D:
-	return Skeleton.build(h % 4, h)
+	# Tilt pour le Mage (index 1) : son chapeau retombe sur le visage.
+	return Kaykit.build(SKEL_MODELS, h % SKEL_MODELS.size(), h, -0.12 if h % 4 == 1 else 0.0)
+
+func _char_adventurer(h: int) -> Node3D:
+	return Kaykit.build(ADV_MODELS, h % ADV_MODELS.size(), h)
 
 func _build_scene() -> void:
 	var id := String(UI.obj(view.get("options")).get("scene", ""))
@@ -1052,19 +1081,7 @@ func _scene_graveyard() -> void:
 	ground.size = Vector2(40, 40)
 	add_child(_mesh(ground, Color(0.07, 0.11, 0.08), Vector3(0, -0.01, -4), 1.0))
 
-	# Toile de fond : illustration panoramique, non éclairée, centrée derrière
-	# l'arc de sièges et assez large pour encaisser le léger balancement caméra.
-	var bg := MeshInstance3D.new()
-	var bg_quad := QuadMesh.new()
-	bg_quad.size = Vector2(28, 15.75) # 16:9
-	var bg_mat := StandardMaterial3D.new()
-	bg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	bg_mat.albedo_texture = load("res://assets/graveyard_bg.png")
-	bg_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	bg_quad.material = bg_mat
-	bg.mesh = bg_quad
-	bg.position = Vector3(0, 6.5, -9)
-	add_child(bg)
+	_backdrop("res://assets/graveyard_bg.png")
 
 	# Pierres tombales éparses — volumes simples pour casser la planéité
 	# du fond et donner de la profondeur aux squelettes.
@@ -1092,6 +1109,155 @@ func _scene_graveyard() -> void:
 		var ti := _mesh(trunk, Color(0.1, 0.09, 0.1), Vector3(side * 5.2, 2.25, -6.5), 1.0)
 		ti.rotation_degrees.z = side * 6.0
 		add_child(ti)
+
+	_table()
+	_camera()
+
+# Toile de fond : illustration panoramique, non éclairée, centrée derrière
+# l'arc de sièges et assez large pour encaisser le léger balancement caméra.
+func _backdrop(texture_path: String) -> void:
+	var bg := MeshInstance3D.new()
+	var bg_quad := QuadMesh.new()
+	bg_quad.size = Vector2(28, 15.75) # 16:9
+	var bg_mat := StandardMaterial3D.new()
+	bg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bg_mat.albedo_texture = load(texture_path)
+	bg_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	bg_quad.material = bg_mat
+	bg.mesh = bg_quad
+	bg.position = Vector3(0, 6.5, -9)
+	add_child(bg)
+
+# Forêt : même table/gobelets/caméra, toile de fond clairière + rochers et
+# champignons en volume, lumière « soleil à travers la canopée ».
+func _scene_forest() -> void:
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.04, 0.08, 0.07)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.32, 0.44, 0.36)
+	env.ambient_light_energy = 0.8
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.25, 0.4, 0.3)
+	env.fog_density = 0.03
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+
+	# Soleil filtré par la canopée + appoint chaud au-dessus de la table.
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-55, -20, 0)
+	sun.light_color = Color(0.85, 0.95, 0.8)
+	sun.light_energy = 0.9
+	sun.shadow_enabled = true
+	add_child(sun)
+
+	var key := OmniLight3D.new()
+	key.position = Vector3(0, 2.5, 0.3)
+	key.light_color = Color(1.0, 0.82, 0.6)
+	key.light_energy = 1.1
+	key.omni_range = 6.0
+	key.shadow_enabled = true
+	add_child(key)
+
+	# Sous-bois : texture procédurale mouchetée (tons des zones d'ombre de
+	# l'illustration) — un aplat uniforme jurerait avec le fond peint.
+	var ground := PlaneMesh.new()
+	ground.size = Vector2(40, 40)
+	var gmat := StandardMaterial3D.new()
+	gmat.albedo_texture = _ground_tex()
+	gmat.uv1_scale = Vector3(16, 16, 16)
+	gmat.roughness = 1.0
+	ground.material = gmat
+	var gi := MeshInstance3D.new()
+	gi.mesh = ground
+	gi.position = Vector3(0, -0.01, -4)
+	add_child(gi)
+
+	_backdrop("res://assets/forest_bg.png")
+
+	# Chemin de dalles qui prolonge le sentier de l'image jusqu'à la table —
+	# c'est lui qui fait la transition entre la toile et le premier plan.
+	var slab := Color(0.5, 0.45, 0.36)
+	for d in [
+		[Vector3(0.0, 0.015, -2.6), Vector3(0.5, 0.0, 0.36), 5.0],
+		[Vector3(0.15, 0.015, -3.5), Vector3(0.42, 0.0, 0.3), -12.0],
+		[Vector3(-0.1, 0.015, -4.3), Vector3(0.48, 0.0, 0.33), 18.0],
+		[Vector3(0.2, 0.015, -5.2), Vector3(0.38, 0.0, 0.28), -8.0],
+		[Vector3(-0.15, 0.015, -6.0), Vector3(0.44, 0.0, 0.3), 22.0],
+		[Vector3(0.1, 0.015, -6.9), Vector3(0.35, 0.0, 0.26), -15.0],
+		[Vector3(-0.3, 0.015, 1.9), Vector3(0.55, 0.0, 0.4), 10.0],
+		[Vector3(0.25, 0.015, 2.6), Vector3(0.5, 0.0, 0.36), -18.0],
+		[Vector3(-0.9, 0.015, 2.1), Vector3(0.42, 0.0, 0.3), 30.0],
+		[Vector3(0.9, 0.015, 2.0), Vector3(0.38, 0.0, 0.28), -25.0],
+	]:
+		var sl := CylinderMesh.new()
+		sl.top_radius = 1.0
+		sl.bottom_radius = 1.1
+		sl.height = 0.06
+		sl.radial_segments = 7 # arêtes irrégulières façon pierre taillée
+		var si := _mesh(sl, slab.darkened(randf() * 0.15), d[0], 0.95)
+		si.scale = Vector3(d[1].x, 1.0, d[1].z) # rayon x/z, hauteur fixe
+		si.rotation_degrees.y = d[2]
+		add_child(si)
+
+	# Touffes d'herbe en cônes serrés le long du chemin et aux pieds des rochers.
+	var tuft := Color(0.1, 0.25, 0.12)
+	for g in [
+		Vector3(-1.3, 0, -3.0), Vector3(1.4, 0, -3.6), Vector3(-1.5, 0, -4.9),
+		Vector3(1.3, 0, -5.5), Vector3(-1.0, 0, -6.5), Vector3(1.1, 0, -7.0),
+		Vector3(-3.6, 0, -3.4), Vector3(3.9, 0, -3.0), Vector3(-2.4, 0, -5.6),
+		Vector3(2.5, 0, -6.4), Vector3(-1.2, 0, 1.8), Vector3(1.1, 0, 2.2),
+		Vector3(-0.6, 0, 2.7), Vector3(1.6, 0, 1.6),
+	]:
+		var t := CylinderMesh.new()
+		t.top_radius = 0.0
+		t.bottom_radius = 0.07
+		t.height = 0.28
+		var ti := _mesh(t, tuft.darkened(randf() * 0.2), g + Vector3(0, 0.14, 0), 1.0)
+		ti.rotation_degrees.z = (randf() - 0.5) * 14.0
+		add_child(ti)
+
+	# Rochers moussus épars — parallaxe devant la toile de fond.
+	var rock := Color(0.3, 0.34, 0.3)
+	for r in [
+		[Vector3(-3.2, 0.22, -4.6), Vector3(0.7, 0.45, 0.5), 15.0],
+		[Vector3(3.5, 0.18, -5.0), Vector3(0.55, 0.36, 0.45), -20.0],
+		[Vector3(-2.0, 0.15, -6.0), Vector3(0.5, 0.3, 0.4), 40.0],
+		[Vector3(4.5, 0.25, -3.6), Vector3(0.8, 0.5, 0.6), -10.0],
+		[Vector3(-4.7, 0.2, -3.2), Vector3(0.6, 0.4, 0.5), 25.0],
+	]:
+		var rm := SphereMesh.new()
+		rm.radius = 0.5
+		rm.height = 1.0
+		var ri := _mesh(rm, rock.darkened(randf() * 0.12), r[0], 1.0)
+		ri.scale = r[1]
+		ri.rotation_degrees.y = r[2]
+		add_child(ri)
+
+	# Champignons à l'amanite, comme sur l'illustration — pied crème + chapeau
+	# rouge en demi-sphère aplatie.
+	for m in [
+		[Vector3(-2.6, 0, -4.2), 0.55],
+		[Vector3(-2.95, 0, -4.0), 0.35],
+		[Vector3(3.1, 0, -4.4), 0.5],
+		[Vector3(4.2, 0, -5.6), 0.4],
+		[Vector3(-4.3, 0, -4.8), 0.6],
+	]:
+		var pos: Vector3 = m[0]
+		var sc: float = m[1]
+		var stem := CylinderMesh.new()
+		stem.top_radius = 0.06 * sc
+		stem.bottom_radius = 0.08 * sc
+		stem.height = 0.5 * sc
+		add_child(_mesh(stem, Color(0.9, 0.85, 0.7), pos + Vector3(0, 0.25 * sc, 0), 0.9))
+		var cap := SphereMesh.new()
+		cap.radius = 0.28 * sc
+		cap.height = 0.56 * sc
+		cap.is_hemisphere = true
+		var ci := _mesh(cap, Color(0.75, 0.15, 0.1), pos + Vector3(0, 0.45 * sc, 0), 0.6)
+		ci.scale.y = 0.6
+		add_child(ci)
 
 	_table()
 	_camera()
@@ -1234,6 +1400,17 @@ func _camera() -> void:
 	add_child(cam)
 	cam.look_at_from_position(Vector3(0, 1.55, 3.0), Vector3(0, 0.82, -0.3))
 
+# Herbe mouchetée procédurale — tons de sous-bois sombre, répétée en damier
+# sur le plan de sol (uv1_scale) pour casser l'aplat uniforme.
+func _ground_tex() -> ImageTexture:
+	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.07, 0.14, 0.09))
+	for i in 60:
+		var c := Vector2i(randi_range(0, 63), randi_range(0, 63))
+		var col: Color = [Color(0.1, 0.2, 0.12), Color(0.05, 0.09, 0.07), Color(0.14, 0.22, 0.12), Color(0.09, 0.16, 0.08)][i % 4]
+		Die._fill_circle(img, c, randi_range(3, 9), col)
+	return ImageTexture.create_from_image(img)
+
 func _make_splat_texture() -> ImageTexture:
 	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
@@ -1260,7 +1437,8 @@ func _throw_tomato(mii: Node3D, from_seat := -1) -> void:
 		var inward := -fm.global_position
 		inward.y = 0
 		p0 = fm.global_position + Vector3(0, 1.25, 0) + inward.normalized() * 0.3
-	var p2: Vector3 = mii.global_position + Vector3(0, 1.32, 0.05)
+	var p2: Vector3 = mii.impact_point() if mii.has_method("impact_point") \
+		else mii.global_position + Vector3(0, 1.32, 0.05)
 	var mid := (p0 + p2) / 2.0 + Vector3(0, 0.8, 0)
 	var twn := create_tween()
 	twn.tween_method(_bezier_move.bind(tomato, p0, mid, p2), 0.0, 1.0, 0.55).set_ease(Tween.EASE_IN)

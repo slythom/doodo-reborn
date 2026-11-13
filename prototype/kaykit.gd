@@ -1,22 +1,18 @@
-class_name Skeleton
+class_name Kaykit
 extends Node3D
 
-# Personnages KayKit Skeletons 1.1 (CC0 — Kay Lousberg, kaylousberg.com).
-# Les 4 variantes partagent le rig Rig_Medium : les animations vivent dans
-# les GLBs du rig et leurs pistes s'appliquent telles quelles (mêmes noms
-# de bones) — une AnimationLibrary commune suffit.
+# Personnages KayKit sur rig Rig_Medium, CC0 — Kay Lousberg, kaylousberg.com.
+# Skeletons 1.1 (assets/skeletons/) et Adventurers 2.0 (assets/adventurers/)
+# partagent le même rig : les animations vivent dans les GLBs du rig et leurs
+# pistes s'appliquent telles quelles (mêmes noms de bones) — une seule
+# AnimationLibrary commune suffit pour tous les packs.
 
-static var _models: Array = [
-	load("res://assets/skeletons/Skeleton_Minion.glb"),
-	load("res://assets/skeletons/Skeleton_Mage.glb"),
-	load("res://assets/skeletons/Skeleton_Rogue.glb"),
-	load("res://assets/skeletons/Skeleton_Warrior.glb"),
-]
 static var _anim_general: PackedScene = load("res://assets/skeletons/Rig_Medium_General.glb")
 static var _anim_move: PackedScene = load("res://assets/skeletons/Rig_Medium_MovementBasic.glb")
 static var _lib: AnimationLibrary
 
-const TARGET_H := 1.4 # gabarit Mii — les squelettes paraissent plus gros (capes, chapeaux)
+const TARGET_H := 1.3 # un peu sous le gabarit Mii (1,53) — les KayKit ont des silhouettes larges (capes, épaulettes, chapeaux) qui grossissent l'apparence
+const LIFT := 0.22 # les pieds sont cachés par la table → on remonte le buste visible
 
 var ap: AnimationPlayer
 var _inst: Node3D
@@ -51,12 +47,14 @@ static func _measure(n: Node, t: Transform3D, aabb: AABB) -> AABB:
 		aabb = _measure(c, t, aabb)
 	return aabb
 
-# variant : index du modèle (0-3) ; seed : hachage pseudo pour varier l'idle.
-static func build(variant: int, seed := 0) -> Skeleton:
-	var root := Skeleton.new()
-	var ps: PackedScene = _models[variant % _models.size()]
+# models : PackedScenes du pack ; variant : index ; seed : hachage pseudo pour
+# varier l'idle ; tilt : inclinaison « tête levée » (chapeau qui masque le
+# visage vu d'en face, ex. Mage squelette).
+static func build(models: Array, variant: int, seed := 0, tilt := 0.0) -> Kaykit:
+	var root := Kaykit.new()
+	var ps: PackedScene = models[variant % models.size()]
 	if ps == null:
-		push_error("skeleton glb manquant : variant %d" % variant)
+		push_error("kaykit glb manquant : variant %d" % variant)
 		return root
 	var inst: Node3D = ps.instantiate()
 	root.add_child(inst)
@@ -68,10 +66,8 @@ static func build(variant: int, seed := 0) -> Skeleton:
 		var f := TARGET_H / h
 		inst.scale = Vector3.ONE * f
 		root._front = clamp(aabb.end.z * f + 0.05, 0.12, 0.45)
-	# Le chapeau du Mage retombe sur le visage vu d'en face — légère
-	# inclinaison « tête levée » pour dégager le regard.
-	if variant % _models.size() == 1:
-		inst.rotation.x = -0.12
+	inst.rotation.x = tilt
+	inst.position.y = LIFT
 
 	var sks := inst.find_children("*", "Skeleton3D", true, false)
 	if not sks.is_empty():
@@ -118,9 +114,18 @@ func set_face(_idx: int) -> void:
 	pass # pas de variantes de visage — API compatible avec Mii
 
 # Point d'accroche du splat de tomate, en espace local du wrapper — la tête
-# d'un squelette n'est ni à la hauteur ni à la profondeur de celle d'un Mii.
+# d'un personnage KayKit n'est ni à la hauteur ni à la profondeur d'un Mii.
 func splat_anchor() -> Vector3:
 	return Vector3(0, TARGET_H * 0.82, _front)
+
+# Point d'impact de la tomate (espace monde) : visage = juste devant et au-
+# dessus de la jointure du bone `head`. Fallback sur l'ancre wrapper.
+func impact_point() -> Vector3:
+	var face_dir := global_transform.basis.z
+	if _skel != null and _head_bone >= 0:
+		var head: Vector3 = (_skel.global_transform * _skel.get_bone_global_pose(_head_bone)).origin
+		return head + face_dir * 0.12 + Vector3.UP * 0.07
+	return to_global(splat_anchor())
 
 # Parente le splat à l'os de la tête : pendant Hit_A (recul) le visage bouge
 # — un enfant du wrapper resterait en l'air alors que le crâne recule.
@@ -142,6 +147,6 @@ func attach_splat(splat: Node3D) -> void:
 	var face_dir := global_transform.basis.z
 	var zloc := (ba_world.basis.inverse() * face_dir).normalized()
 	splat.basis = Basis.looking_at(-zloc).scaled(Vector3.ONE / _inst.scale.y)
-	# À hauteur de visage, juste devant le crâne — pas sur _front : chez le
-	# Mage c'est le bout du chapeau, le splat flotterait loin devant la tête.
-	splat.position = ba_world.affine_inverse() * (ba_world.origin + face_dir * 0.15 + Vector3.UP * 0.07)
+	# Le décal se colle là où la tomate a visé — pas sur _front : chez le
+	# Mage c'est le bout du chapeau, il flotterait loin devant la tête.
+	splat.position = ba_world.affine_inverse() * impact_point()

@@ -49,7 +49,7 @@ const DefaultScene = "salon"
 
 // KnownScenes : ids de décor acceptés par le serveur. Le client garde les
 // builders 3D ; le serveur n'a besoin que de la liste des ids valides.
-var KnownScenes = map[string]bool{DefaultScene: true, "cimetiere": true}
+var KnownScenes = map[string]bool{DefaultScene: true, "cimetiere": true, "foret": true}
 
 // NormalizeScene retombe sur DefaultScene pour toute valeur absente ou inconnue.
 func NormalizeScene(s string) string {
