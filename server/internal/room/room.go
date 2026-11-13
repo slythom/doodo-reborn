@@ -670,6 +670,7 @@ func (r *Room) viewForLocked(m *Member) *protocol.View {
 		Host:       r.Host,
 		Spectators: len(r.spectators),
 		YourSeat:   -1,
+		Players:    []protocol.PlayerView{}, // jamais null en JSON
 	}
 	if r.game != nil {
 		v.Round, v.Turn = r.game.Round, r.game.Turn

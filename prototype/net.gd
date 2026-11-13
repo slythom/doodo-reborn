@@ -83,7 +83,7 @@ func _on_packet(txt: String) -> void:
 			view = data
 			room_state.emit(data)
 		"events":
-			game_events.emit(data.get("events", []))
+			game_events.emit(UI.arr(data.get("events")))
 		"notice":
 			notice_msg.emit(data)
 		"error":

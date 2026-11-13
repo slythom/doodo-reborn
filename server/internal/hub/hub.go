@@ -234,6 +234,7 @@ func (h *Hub) hello(c *conn, m protocol.ClientMsg) *session {
 }
 
 func (h *Hub) createRoom(c *conn, s *session, m protocol.ClientMsg) {
+	h.leave(s) // une session ne vit que dans une salle à la fois
 	opts := protocol.Options{
 		Game:           game.DefaultOptions(),
 		TimerSeconds:   30,
@@ -273,6 +274,7 @@ func (h *Hub) joinRoom(c *conn, s *session, m protocol.ClientMsg) {
 	if s.room == r {
 		return // déjà dedans
 	}
+	h.leave(s)
 	member := &room.Member{ID: s.token, Name: s.name}
 	if err := r.Join(member); err != nil {
 		h.sendErr(c, "join_failed", err.Error())

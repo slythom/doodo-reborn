@@ -86,6 +86,8 @@ type Event struct {
 	Count   int       `json:"count"`   // EvReveal : décompte réel
 	Dice    [][]int   `json:"dice"`    // EvReveal : dés de chaque joueur (par siège)
 	Ranking []int     `json:"ranking"` // EvGameOver : classement du 1er au dernier
+	Calza   bool      `json:"calza,omitempty"` // EvReveal : provient d'un calza (vs dudo)
+	Bidder  int       `json:"bidder,omitempty"` // EvReveal : siège de l'enchérisseur contesté
 }
 
 type Player struct {
@@ -290,9 +292,9 @@ func (g *Game) resolve(challenger int, calza bool) []Event {
 	count := g.count(g.Current.Value)
 	dice := make([][]int, len(g.Players))
 	for i, p := range g.Players {
-		dice[i] = append([]int(nil), p.Dice...)
+		dice[i] = append([]int{}, p.Dice...)
 	}
-	evs := []Event{{Type: EvReveal, Player: challenger, Bid: g.Current, Count: count, Dice: dice}}
+	evs := []Event{{Type: EvReveal, Player: challenger, Bid: g.Current, Count: count, Dice: dice, Calza: calza, Bidder: g.Bidder}}
 
 	var starter int
 	if calza && count == g.Current.Quantity {

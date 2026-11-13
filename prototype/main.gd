@@ -12,29 +12,47 @@ const ARC_RIGHT := 325.0     #                  extrémité droite
 const ARC_CENTER := 270.0
 
 var view := {}
-var seats := {}          # seat_idx -> {mii, cup, name_lbl, count_lbl}
-var my_dice: Array[Die] = []
+var seats := {}          # seat_idx -> {mii, cup, badge, badge_sp}
 var splat_tex: ImageTexture
 var cam: Camera3D
 var sway_t := 0.0
 var splat_by_mii := {}   # mii -> splat node
 
-# HUD
+# HUD (charte Wii — ui.gd)
 var title_lbl: Label
-var bid_lbl: Label
-var turn_lbl: Label
-var status_lbl: Label
-var qty_spin: SpinBox
-var val_opt: OptionButton
+var turn_lbl: Label          # pill orange « À TOI DE JOUER ! »
+var bid_row: HBoxContainer   # enchère en cours : quantité × icône + chip enchérisseur
+var palifico_lbl: Label
+var status_lbl: Label        # pill de toast (chat, élimination…)
+var my_dice_box: HBoxContainer # ma main : icônes de dés 2D
+var qty_val := 1               # quantité choisie (stepper −/+)
+var qty_lbl: Label
+var face_icons: Array = []   # sélecteur de face : DieIcons cliquables
+var val_face := 1
 var bid_btn: Button
 var dudo_btn: Button
 var calza_btn: Button
-var reveal_panel: PanelContainer
-var reveal_lbl: Label
+var action_bar: PanelContainer
+var status_gen := 0
+var _turn_tween: Tween
+# Révélation (même layout que la maquette : contenu direct sur scrim, sans panneau)
+var reveal_panel: Control
+var reveal_title: Label
+var reveal_sub: Label          # « X conteste l'enchère de Y »
+var reveal_bid_line: HBoxContainer
+var reveal_dice_box: VBoxContainer
+var reveal_count: Label
+var reveal_verdict: Label
+var reveal_verdict_sub: Label  # « X perd un dé »
+var reveal_fill: PanelContainer # remplissage du bouton « Continuer »
+var reveal_glow: TextureRect   # halo coloré sous le titre (rouge/vert)
+var reveal_tween: Tween
+var _wobble_tween: Tween
+var _glow_pulse: Tween
+var reveal_gen := 0           # invalide les timers d'un reveal précédent
 var over_panel: PanelContainer
-var over_lbl: Label
+var over_box: VBoxContainer
 var rematch_btn: Button
-var action_bar: VBoxContainer
 
 static func mat(color: Color, roughness := 0.8, emission := false) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -67,9 +85,9 @@ func _ready() -> void:
 	_refresh()
 	Net.room_state.connect(_on_view)
 	Net.game_events.connect(_on_events)
-	Net.net_error.connect(func(_c: String, m: String) -> void: status_lbl.text = m)
+	Net.net_error.connect(func(_c: String, m: String) -> void: _set_status(m))
 	Net.notice_msg.connect(_on_notice)
-	Net.connection_closed.connect(func() -> void: status_lbl.text = "connexion perdue — reconnexion…")
+	Net.connection_closed.connect(func() -> void: _set_status("connexion perdue — reconnexion…"))
 	Net.connection_opened.connect(func() -> void: Net.hello()) # re-join après reconnexion
 
 func _on_view(v: Dictionary) -> void:
@@ -89,7 +107,7 @@ func _arc_angle(idx: int, total: int) -> float:
 	return ARC_LEFT + idx * (ARC_RIGHT - ARC_LEFT) / float(total - 1)
 
 func _build_seats() -> void:
-	var n: int = view.players.size()
+	var n: int = UI.arr(view.get("players")).size()
 	var my_seat: int = view.get("your_seat", -1)
 	var is_spectator := my_seat < 0
 	var skins := [Color(0.95, 0.78, 0.6), Color(0.85, 0.62, 0.42), Color(0.98, 0.85, 0.7), Color(0.7, 0.5, 0.35), Color(0.92, 0.72, 0.55), Color(0.8, 0.6, 0.45)]
@@ -97,7 +115,7 @@ func _build_seats() -> void:
 	var hairs := [Color(0.2, 0.12, 0.06), Color(0.5, 0.32, 0.15), Color(0.1, 0.1, 0.1), Color(0.75, 0.55, 0.2), Color(0.35, 0.2, 0.1), Color(0.6, 0.6, 0.65)]
 
 	# En spectateur, tous les joueurs sont sur l'arc (triés par siège).
-	var plist: Array = view.players.duplicate()
+	var plist: Array = UI.arr(view.get("players")).duplicate()
 	if is_spectator:
 		plist.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.get("seat", 0)) < int(b.get("seat", 0)))
 
@@ -139,20 +157,37 @@ func _build_seats() -> void:
 		add_child(mii)
 		seat["mii"] = mii
 
-		var nl := Label3D.new()
-		nl.text = p.get("name", "?")
-		nl.font_size = 48
-		nl.position = pos + Vector3(0, 1.75, 0)
-		nl.modulate = Color(1, 1, 1, 0.85)
-		add_child(nl)
-		seat["name_lbl"] = nl
+		# Pseudo + compteur : chip colorée + badge circulaire (comme la maquette),
+		# rendus dans un SubViewport affiché en billboard au-dessus du Mii.
+		var bdg := _seat_badge(p.get("name", "?"), p_seat)
+		bdg.sprite.position = pos + Vector3(0, 1.78, 0)
+		seat["badge"] = bdg.badge
+		seat["badge_sp"] = bdg.sprite
 
-		var cl := Label3D.new()
-		cl.font_size = 40
-		cl.position = Vector3(cos(a) * (CUP_RADIUS + 0.02), TABLE_TOP_Y + 0.32, sin(a) * (CUP_RADIUS + 0.02))
-		cl.modulate = Color(1, 0.9, 0.5)
-		add_child(cl)
-		seat["count_lbl"] = cl
+# Chip pseudo + badge compteur affichés en 2D au-dessus du Mii :
+# un SubViewport rend un HBox [chip][badge] texturé sur un Sprite3D billboard.
+func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
+	var vp := SubViewport.new()
+	vp.transparent_bg = true
+	vp.size = Vector2i(400, 90)
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var h := HBoxContainer.new()
+	h.set_anchors_preset(Control.PRESET_FULL_RECT)
+	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	h.add_theme_constant_override("separation", 8)
+	h.add_child(UI.player_chip(p_name, p_seat, 26))
+	var badge := UI.CircleBadge.new("5", UI.PLAYER[p_seat % UI.PLAYER.size()], 44)
+	h.add_child(badge)
+	vp.add_child(h)
+	add_child(vp)
+
+	var sp := Sprite3D.new()
+	sp.texture = vp.get_texture()
+	sp.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	sp.pixel_size = 0.004
+	sp.shaded = false
+	add_child(sp)
+	return {"sprite": sp, "badge": badge}
 
 func _build_my_hands() -> void:
 	var skin := Color(0.95, 0.78, 0.6)
@@ -176,51 +211,31 @@ func _refresh() -> void:
 	_update_actions()
 
 func _update_players() -> void:
-	for i in view.players.size():
-		var p: Dictionary = view.players[i]
+	var players := UI.arr(view.get("players"))
+	for i in players.size():
+		var p: Dictionary = players[i]
 		var p_seat: int = p.get("seat", i)
 		if not seats.has(p_seat):
 			continue
 		var seat: Dictionary = seats[p_seat]
-		var eliminated: bool = p.get("dice_count", 0) == 0
-		if seat.has("count_lbl"):
-			seat["count_lbl"].text = "éliminé" if eliminated else "%d dé(s)" % p.get("dice_count", 0)
-		if seat.has("mii") and eliminated:
-			seat["mii"].modulate = Color(1, 1, 1, 0.3)
+		var eliminated: bool = int(p.get("dice_count", 0)) == 0
+		if seat.has("badge"):
+			seat["badge"].set_text(str(int(p.get("dice_count", 0))))
+		if seat.has("badge_sp"):
+			seat["badge_sp"].visible = not eliminated
+		if seat.has("mii"):
+			seat["mii"].visible = not eliminated # éliminé : le Mii quitte la table
 
+# Ma main : rangée d'icônes 2D dans le HUD (plus de dés 3D sur la table).
 func _update_my_dice() -> void:
-	for d in my_dice:
-		d.queue_free()
-	my_dice.clear()
+	for c in my_dice_box.get_children():
+		c.queue_free()
 	var me := _player_by_seat(view.get("your_seat", -1))
-	if me.is_empty():
-		return
-	var dice_vals: Array = me.get("dice", [])
-	var a := deg_to_rad(MY_SEAT_ANGLE)
-	var center := Vector3(cos(a) * (CUP_RADIUS + 0.25), TABLE_TOP_Y + Die.SIZE / 2.0 + 0.001, sin(a) * (CUP_RADIUS + 0.25))
-	for i in dice_vals.size():
-		var d := Die.build()
-		d.freeze = true
-		var spread := dice_vals.size() - 1
-		d.position = center + Vector3((i - spread / 2.0) * 0.1, 0, 0.12)
-		d.rotation_degrees = _face_up_rotation(dice_vals[i])
-		add_child(d)
-		my_dice.append(d)
-
-# Fait pointer la face `value` du dé vers le haut.
-# Faces de Die.build : 5:+Y 2:-Y 3:+X 4:-X 1:-Z (FORWARD) 6:+Z (BACK).
-func _face_up_rotation(v: int) -> Vector3:
-	match v:
-		5: return Vector3.ZERO
-		2: return Vector3(180, 0, 0)
-		3: return Vector3(0, 0, 90)
-		4: return Vector3(0, 0, -90)
-		1: return Vector3(90, 0, 0)   # -Z -> +Y
-		6: return Vector3(-90, 0, 0)  # +Z -> +Y
-	return Vector3.ZERO
+	for v in UI.arr(me.get("dice")):
+		my_dice_box.add_child(UI.DieIcon.new(int(v), 46))
 
 func _player_by_seat(seat: int) -> Dictionary:
-	for p in view.get("players", []):
+	for p in UI.arr(view.get("players")):
 		if int(p.get("seat", -1)) == seat:
 			return p
 	return {}
@@ -228,25 +243,45 @@ func _player_by_seat(seat: int) -> Dictionary:
 func _update_turn() -> void:
 	var turn: int = view.get("turn", -1)
 	var mine: int = view.get("your_seat", -1)
-	if turn == mine:
-		turn_lbl.text = "À toi de jouer !"
-		turn_lbl.modulate = Color(0.4, 1, 0.4)
+	var mine_turn: bool = turn == mine and not view.get("over", false)
+	if _turn_tween:
+		_turn_tween.kill()
+		_turn_tween = null
+	turn_lbl.modulate.a = 1.0
+	if mine_turn:
+		turn_lbl.text = "À TOI DE JOUER !"
+		turn_lbl.add_theme_color_override("font_color", Color.WHITE)
+		turn_lbl.add_theme_stylebox_override("normal", UI.sb(UI.ORANGE, UI.ORANGE_DK, 20, 0, 3))
+		turn_lbl.visible = true
+		_turn_tween = create_tween().set_loops()
+		_turn_tween.tween_property(turn_lbl, "modulate:a", 0.55, 0.45)
+		_turn_tween.tween_property(turn_lbl, "modulate:a", 1.0, 0.45)
 	elif turn >= 0:
 		turn_lbl.text = "Tour de %s" % _player_name(turn)
-		turn_lbl.modulate = Color(1, 1, 1, 0.7)
+		turn_lbl.add_theme_color_override("font_color", UI.DIM)
+		var tsb := UI.sb(UI.PANEL, UI.EDGE, 20, 1)
+		tsb.shadow_color = Color(0, 0, 0, 0.3)
+		tsb.shadow_size = 6
+		tsb.shadow_offset = Vector2(0, 3)
+		turn_lbl.add_theme_stylebox_override("normal", tsb)
+		turn_lbl.visible = true
 	else:
-		turn_lbl.text = ""
+		turn_lbl.visible = false
 
+# Enchère en cours : « 5 × ⚄ par <chip> » dans la pill blanche du haut.
 func _update_bid() -> void:
+	for c in bid_row.get_children():
+		c.queue_free()
 	if view.get("has_bid", false):
-		var b: Dictionary = view.bid
-		var bidder := _player_name(view.get("bidder", -1))
-		var vstr := "paco" if b.get("value", 0) == 1 else str(b.get("value", 0))
-		bid_lbl.text = "Enchère : %d x %s — %s" % [b.get("quantity", 0), vstr, bidder]
+		var b := UI.obj(view.get("bid"))
+		bid_row.add_child(UI.label(str(int(b.get("quantity", 0))), 34, UI.INK, 700, true))
+		bid_row.add_child(UI.label("×", 24, UI.DIM, 800))
+		bid_row.add_child(UI.DieIcon.new(int(b.get("value", 1)), 34))
+		bid_row.add_child(UI.label("par", 20, UI.DIM, 600))
+		bid_row.add_child(UI.player_chip(_player_name(view.get("bidder", -1)), int(view.get("bidder", -1))))
 	else:
-		bid_lbl.text = "Manche %d — pas encore d'enchère" % view.get("round", 1)
-	if view.get("palifico", false):
-		bid_lbl.text += "   [PALIFICO]"
+		bid_row.add_child(UI.label("Manche %d — pas encore d'enchère" % int(view.get("round", 1)), 20, UI.DIM, 600))
+	palifico_lbl.visible = view.get("palifico", false)
 
 # Reproduction client-side de la légalité (miroir de game.LegalBid) pour
 # activer/désactiver le bouton — le serveur reste l'arbitre.
@@ -255,7 +290,7 @@ func _legal(q: int, v: int) -> bool:
 		return false
 	if not view.get("has_bid", false):
 		return view.get("palifico", false) or v != 1  # ouverture : paco interdit
-	var c: Dictionary = view.bid
+	var c := UI.obj(view.get("bid"))
 	var cq: int = c.get("quantity", 0)
 	var cv: int = c.get("value", 1)
 	if view.get("palifico", false):
@@ -266,15 +301,46 @@ func _legal(q: int, v: int) -> bool:
 		return q >= int(ceil(cq / 2.0))
 	return q > cq or (q == cq and v > cv)
 
+# Bouton de stepper : texte bleu plat dans la pill bordée (style maquette).
+func _step_btn(t: String) -> Button:
+	var b := Button.new()
+	b.text = t
+	b.custom_minimum_size = Vector2(38, 42)
+	b.add_theme_font_override("font", UI.font_w(800))
+	b.add_theme_font_size_override("font_size", 22)
+	b.add_theme_color_override("font_color", UI.BLUE)
+	b.add_theme_color_override("font_hover_color", UI.BLUE_DK)
+	var tr := UI.sb(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 10, 0)
+	for st in ["normal", "pressed", "focus", "disabled"]:
+		b.add_theme_stylebox_override(st, tr)
+	b.add_theme_stylebox_override("hover", UI.sb(Color("#E4F5FD"), Color(0, 0, 0, 0), 10, 0))
+	return b
+
+func _set_qty(delta: int) -> void:
+	qty_val = clampi(qty_val + delta, 1, 60)
+	qty_lbl.text = str(qty_val)
+	_update_actions()
+
+# Sélecteur de face : la face choisie est cerclée bleu, les autres atténuées.
+func _set_face(v: int) -> void:
+	val_face = v
+	for i in face_icons.size():
+		var ic: UI.DieIcon = face_icons[i]
+		ic.sel = i + 1 == v
+		ic.modulate.a = 1.0 if ic.sel else 0.45
+		ic.queue_redraw()
+	_update_actions()
+
 func _update_actions() -> void:
 	var spectator: bool = view.get("your_seat", -1) < 0
 	action_bar.visible = not spectator and not view.get("over", false)
 	if spectator:
 		return
 	var my_turn: bool = view.get("turn", -1) == view.get("your_seat", -2) and not view.get("over", false)
-	bid_btn.disabled = not my_turn or not _legal(int(qty_spin.value), val_opt.selected + 1)
+	bid_btn.disabled = not my_turn or not _legal(qty_val, val_face)
 	dudo_btn.disabled = not my_turn or not view.get("has_bid", false)
-	calza_btn.disabled = not my_turn or not view.get("has_bid", false) or not view.get("options", {}).get("game", {}).get("calza_enabled", true)
+	var game_opts := UI.obj(UI.obj(view.get("options")).get("game"))
+	calza_btn.disabled = not my_turn or not view.get("has_bid", false) or not game_opts.get("calza_enabled", true)
 
 # ---- Événements serveur (révélation, pertes, fin) ----
 
@@ -283,36 +349,209 @@ func _on_events(events: Array) -> void:
 		match e.get("type", ""):
 			"reveal":
 				_show_reveal(e)
+			"die_lost":
+				# Verdict affiché dans l'overlay de révélation encore ouvert.
+				if reveal_panel.visible:
+					reveal_verdict_sub.text = "%s perd un dé" % _player_name(e.get("player", -1))
+			"die_gained":
+				if reveal_panel.visible:
+					reveal_verdict_sub.text = "%s regagne un dé" % _player_name(e.get("player", -1))
 			"eliminated":
-				var name := _player_name(e.get("player", -1))
-				status_lbl.text = "%s est éliminé" % name
+				_set_status("%s est éliminé" % _player_name(e.get("player", -1)))
 			"game_over":
 				_show_game_over(e)
 
 func _player_name(seat: int) -> String:
 	return _player_by_seat(seat).get("name", "?")
 
+# Toast éphémère (4 s) — génération pour invalider les timers précédents.
+func _set_status(t: String) -> void:
+	status_gen += 1
+	var gen := status_gen
+	status_lbl.text = t
+	status_lbl.visible = not t.is_empty()
+	if t.is_empty():
+		return
+	get_tree().create_timer(4.0).timeout.connect(func() -> void:
+		if gen == status_gen:
+			status_lbl.visible = false)
+
+# ---- Révélation : scrim laiteux, titre pop, comptage animé (specs §7) ----
+
 func _show_reveal(e: Dictionary) -> void:
-	var lines := PackedStringArray()
-	lines.append("Enchère %d x %s — réalité : %d" % [
-		e.get("bid", {}).get("quantity", 0),
-		"paco" if e.get("bid", {}).get("value", 0) == 1 else str(e.get("bid", {}).get("value", 0)),
-		e.get("count", 0)])
-	var dice: Array = e.get("dice", [])
-	for i in dice.size():
-		if dice[i] is Array and not dice[i].is_empty():
-			lines.append("%s : %s" % [_player_name(i), str(dice[i])])
-	reveal_lbl.text = "\n".join(lines)
+	reveal_gen += 1
+	var gen := reveal_gen
+	var calza: bool = e.get("calza", false)
+	reveal_title.text = "CALZA !" if calza else "DUDO !"
+	var tcol := Color("#79DC72") if calza else Color("#FF6E66")
+	reveal_title.add_theme_color_override("font_color", tcol)
+	reveal_title.add_theme_color_override("font_outline_color", tcol.darkened(0.5))
+	reveal_title.add_theme_constant_override("outline_size", 8)
+	reveal_title.add_theme_color_override("font_shadow_color", Color(tcol, 0.45))
+	reveal_glow.modulate = Color(tcol, 0.26)
+	# Le halo respire en boucle.
+	if _glow_pulse:
+		_glow_pulse.kill()
+	_glow_pulse = create_tween().set_loops()
+	_glow_pulse.tween_property(reveal_glow, "modulate:a", 0.36, 1.2)
+	_glow_pulse.tween_property(reveal_glow, "modulate:a", 0.18, 1.2)
+
+	var b := UI.obj(e.get("bid"))
+	var face := int(b.get("value", 1))
+	var qty := int(b.get("quantity", 0))
+	var challenger := _player_name(e.get("player", -1))
+	var bidder := _player_name(e.get("bidder", -1))
+	reveal_sub.text = ("%s parie que l'enchère de %s est exacte" % [challenger, bidder]) if calza \
+		else ("%s conteste l'enchère de %s" % [challenger, bidder])
+
+	for c in reveal_bid_line.get_children():
+		c.queue_free()
+	reveal_bid_line.add_child(UI.label(str(qty), 28, Color.WHITE, 700, true))
+	reveal_bid_line.add_child(UI.label("×", 17, Color("#9AA7C6"), 800))
+	reveal_bid_line.add_child(UI.DieIcon.new(face, 36))
+
+	# Dés par joueur : colonne nom alignée à droite + dés (les concordants
+	# s'illumineront un à un).
+	for c in reveal_dice_box.get_children():
+		c.queue_free()
+	var lit: Array = []
+	var dice_rows := UI.arr(e.get("dice"))
+	for i in dice_rows.size():
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 10)
+		var nm := HBoxContainer.new()
+		nm.custom_minimum_size.x = 100
+		nm.alignment = BoxContainer.ALIGNMENT_END
+		nm.add_child(UI.player_chip(_player_name(i), i, 18))
+		row.add_child(nm)
+		var rvdice := HBoxContainer.new()
+		rvdice.add_theme_constant_override("separation", 10)
+		row.add_child(rvdice)
+		var icons: Array = []
+		for dv in UI.arr(dice_rows[i]):
+			var di := UI.DieIcon.new(int(dv), 36)
+			di.pivot_offset = Vector2(18, 18)
+			var matches := int(dv) == face or (face != 1 and int(dv) == 1)
+			if matches:
+				lit.append(di)
+			else:
+				di.modulate.a = 0.35
+			di.scale = Vector2.ZERO
+			rvdice.add_child(di)
+			icons.append(di)
+		reveal_dice_box.add_child(row)
+		# Entrée en cascade : chaque dé pop avec rebond, décalé par position.
+		for j in icons.size():
+			var pop: Tween = icons[j].create_tween()
+			pop.tween_property(icons[j], "scale", Vector2.ONE, 0.35) \
+				.set_delay(0.1 + i * 0.07 + j * 0.05) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	var total := int(e.get("count", 0))
+	reveal_count.text = "0"
+	reveal_verdict.text = ""
+	reveal_verdict_sub.text = ""
+	reveal_fill.offset_right = 0.0
+	reveal_panel.modulate.a = 0.0
 	reveal_panel.visible = true
-	get_tree().create_timer(4.0).timeout.connect(func() -> void: reveal_panel.visible = false)
+	var fade := create_tween()
+	fade.tween_property(reveal_panel, "modulate:a", 1.0, 0.22)
+
+	# Titre : pop avec rebond puis wobble infini (comme la maquette).
+	reveal_title.scale = Vector2(0.4, 0.4)
+	reveal_title.rotation = 0.0
+	reveal_title.modulate.a = 0.0
+	var pop := create_tween()
+	pop.set_parallel()
+	pop.tween_property(reveal_title, "scale", Vector2.ONE, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pop.tween_property(reveal_title, "modulate:a", 1.0, 0.25)
+	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+		if gen != reveal_gen or _wobble_tween:
+			return
+		_wobble_tween = create_tween().set_loops()
+		_wobble_tween.tween_property(reveal_title, "scale", Vector2(1.04, 1.04), 1.1).set_trans(Tween.TRANS_SINE)
+		_wobble_tween.parallel().tween_property(reveal_title, "rotation_degrees", -1.0, 1.1).set_trans(Tween.TRANS_SINE)
+		_wobble_tween.tween_property(reveal_title, "scale", Vector2.ONE, 1.1).set_trans(Tween.TRANS_SINE)
+		_wobble_tween.parallel().tween_property(reveal_title, "rotation_degrees", 0.0, 1.1).set_trans(Tween.TRANS_SINE))
+
+	# Comptage animé : un dé s'allume toutes les 0,4 s.
+	for i in lit.size():
+		var ic: UI.DieIcon = lit[i]
+		var n := i + 1
+		get_tree().create_timer(0.5 + i * 0.4).timeout.connect(func() -> void:
+			if gen != reveal_gen or not is_instance_valid(ic):
+				return
+			ic.glow = true
+			ic.modulate.a = 1.0
+			ic.queue_redraw()
+			# Le dé qui s'allume fait un punch (scale 1.45 → 1 avec rebond).
+			ic.scale = Vector2(1.45, 1.45)
+			var it := ic.create_tween()
+			it.tween_property(ic, "scale", Vector2.ONE, 0.25) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			reveal_count.text = str(mini(n, total))
+			# Petit punch sur le compteur à chaque dé concordant.
+			reveal_count.scale = Vector2(1.3, 1.3)
+			var pt := create_tween()
+			pt.tween_property(reveal_count, "scale", Vector2.ONE, 0.18))
+	get_tree().create_timer(0.5 + lit.size() * 0.4 + 0.3).timeout.connect(func() -> void:
+		if gen != reveal_gen:
+			return
+		reveal_count.text = str(total)
+		# Verdict d'après le résultat (le nom du perdant arrive via die_lost).
+		if calza:
+			reveal_verdict.text = "L'enchère était exacte !" if total == qty else "L'enchère n'était pas exacte !"
+		else:
+			reveal_verdict.text = "L'enchère tenait !" if total >= qty else "L'enchère ne tenait pas !"
+		reveal_verdict.modulate.a = 0.0
+		var vt := create_tween()
+		vt.tween_property(reveal_verdict, "modulate:a", 1.0, 0.3))
+
+	# « Continuer » : remplissage bleu de gauche à droite sur 10 s puis fermeture.
+	if reveal_tween:
+		reveal_tween.kill()
+	reveal_tween = create_tween()
+	# Largeur fixe de la capsule (340) — le layout n'est pas encore fait
+	# à cet instant, on anime vers la valeur connue.
+	reveal_tween.tween_property(reveal_fill, "offset_right", 340.0, 10.0)
+	reveal_tween.tween_callback(_hide_reveal)
+
+func _hide_reveal() -> void:
+	reveal_gen += 1
+	if reveal_tween:
+		reveal_tween.kill()
+		reveal_tween = null
+	if _wobble_tween:
+		_wobble_tween.kill()
+		_wobble_tween = null
+	if _glow_pulse:
+		_glow_pulse.kill()
+		_glow_pulse = null
+	reveal_panel.visible = false
 
 func _show_game_over(e: Dictionary) -> void:
-	var lines := PackedStringArray(["Classement"])
-	for r in e.get("ranking", []).size():
-		var seat: int = e["ranking"][r]
-		lines.append("%d. %s" % [r + 1, _player_name(seat)])
-	over_lbl.text = "\n".join(lines)
+	_hide_reveal()
+	for c in over_box.get_children():
+		c.queue_free()
+	var t := UI.label("Partie terminée", 34, UI.INK, 700, true)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	over_box.add_child(t)
+	var ranking := UI.arr(e.get("ranking"))
+	for r in ranking.size():
+		var seat: int = int(ranking[r])
+		var chip := UI.player_chip("%d. %s" % [r + 1, _player_name(seat)], seat, 22)
+		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		over_box.add_child(chip)
+	rematch_btn = UI.button("Revanche", "primary")
 	rematch_btn.visible = view.get("your_seat", -1) >= 0 # joueurs seulement
+	rematch_btn.pressed.connect(func() -> void: Net.rematch())
+	over_box.add_child(rematch_btn)
+	var back_btn := UI.button("Retour au menu", "btn")
+	back_btn.pressed.connect(func() -> void:
+		Net.leave()
+		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
+	over_box.add_child(back_btn)
 	over_panel.visible = true
 
 # ---- Emotes (tomate) : envoi optimiste + réception ----
@@ -347,126 +586,299 @@ func _on_notice(d: Dictionary) -> void:
 				if seats.has(seat) and seats[seat].has("mii"):
 					_throw_tomato(seats[seat]["mii"], int(d.get("from_seat", -1)))
 		"chat":
-			status_lbl.text = "%s : %s" % [d.get("from", "?"), d.get("text", "")]
+			_set_status("%s : %s" % [d.get("from", "?"), d.get("text", "")])
 
-# ---- HUD ----
+# ---- HUD (charte Wii — portrait uniquement) ----
 
 func _hud() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
 
-	title_lbl = _label(20, HORIZONTAL_ALIGNMENT_CENTER)
-	title_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	title_lbl.position.y = 20
-	title_lbl.text = "%s — %s" % [view.get("name", "Doodo"), view.get("code", "")]
-	layer.add_child(title_lbl)
+	# Bandeau haut : titre, badge de tour, enchère en cours.
+	var top := VBoxContainer.new()
+	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top.offset_top = 12
+	top.alignment = BoxContainer.ALIGNMENT_CENTER
+	top.add_theme_constant_override("separation", 8)
+	layer.add_child(top)
 
-	bid_lbl = _label(30, HORIZONTAL_ALIGNMENT_CENTER)
-	bid_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	bid_lbl.position.y = 90
-	layer.add_child(bid_lbl)
+	title_lbl = UI.label("%s — %s" % [view.get("name", "Doodo"), view.get("code", "")], 16, UI.DIM, 800)
+	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	top.add_child(title_lbl)
 
-	turn_lbl = _label(26, HORIZONTAL_ALIGNMENT_CENTER)
-	turn_lbl.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	turn_lbl.position.y = 140
-	layer.add_child(turn_lbl)
+	var tc := CenterContainer.new()
+	top.add_child(tc)
+	turn_lbl = UI.label("", 26, Color.WHITE, 700, true)
+	turn_lbl.visible = false
+	tc.add_child(turn_lbl)
 
-	status_lbl = _label(20, HORIZONTAL_ALIGNMENT_CENTER)
-	status_lbl.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	status_lbl.position.y = -180
-	layer.add_child(status_lbl)
+	var bc := CenterContainer.new()
+	top.add_child(bc)
+	var bid_pill := UI.panel()
+	bc.add_child(bid_pill)
+	bid_row = HBoxContainer.new()
+	bid_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	bid_row.add_theme_constant_override("separation", 8)
+	bid_pill.add_child(bid_row)
 
-	# Barre d'actions en bas : deux lignes pour tenir en portrait 720 px.
-	action_bar = VBoxContainer.new()
-	var bar := action_bar
-	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bar.position.y = -170
-	bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	bar.add_theme_constant_override("separation", 10)
-	layer.add_child(bar)
+	var pc := CenterContainer.new()
+	top.add_child(pc)
+	palifico_lbl = UI.pill("PALIFICO", Color("#FFF3D6"), UI.ORANGE_DK, 15)
+	palifico_lbl.visible = false
+	pc.add_child(palifico_lbl)
 
-	var row1 := HBoxContainer.new()
-	row1.alignment = BoxContainer.ALIGNMENT_CENTER
-	row1.add_theme_constant_override("separation", 12)
-	bar.add_child(row1)
+	# Toast éphémère haut-centre (chat, éliminations).
+	var sc := CenterContainer.new()
+	top.add_child(sc)
+	status_lbl = UI.pill("", UI.PANEL, UI.INK, 18)
+	status_lbl.visible = false
+	sc.add_child(status_lbl)
 
-	qty_spin = SpinBox.new()
-	qty_spin.min_value = 1
-	qty_spin.max_value = 60
-	qty_spin.value = 1
-	qty_spin.custom_minimum_size = Vector2(100, 60)
-	qty_spin.add_theme_font_size_override("font_size", 26)
-	qty_spin.value_changed.connect(func(_v: float) -> void: _update_actions())
-	row1.add_child(qty_spin)
-
-	val_opt = OptionButton.new()
-	for v in ["Paco", "2", "3", "4", "5", "6"]:
-		val_opt.add_item(v)
-	val_opt.custom_minimum_size = Vector2(140, 60)
-	val_opt.add_theme_font_size_override("font_size", 26)
-	val_opt.item_selected.connect(func(_i: int) -> void: _update_actions())
-	row1.add_child(val_opt)
-
-	bid_btn = _button("Enchérir", row1)
-	bid_btn.pressed.connect(func() -> void: Net.bid(int(qty_spin.value), val_opt.selected + 1))
-
-	var row2 := HBoxContainer.new()
-	row2.alignment = BoxContainer.ALIGNMENT_CENTER
-	row2.add_theme_constant_override("separation", 12)
-	bar.add_child(row2)
-
-	dudo_btn = _button("Dudo !", row2)
-	dudo_btn.pressed.connect(func() -> void: Net.dudo())
-	calza_btn = _button("Calza !", row2)
-	calza_btn.pressed.connect(func() -> void: Net.calza())
-
-	var leave_btn := _button("Quitter", row2)
+	# Quitter : petit bouton discret en haut à droite.
+	var leave_btn := UI.button("Quitter", "btn")
+	leave_btn.custom_minimum_size = Vector2(0, 44)
+	leave_btn.add_theme_font_size_override("font_size", 18)
+	leave_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	leave_btn.offset_left = -110
+	leave_btn.offset_right = -12
+	leave_btn.offset_top = 12
+	leave_btn.offset_bottom = 56
 	leave_btn.pressed.connect(func() -> void:
 		Net.leave()
 		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
+	layer.add_child(leave_btn)
 
-	# Overlay de révélation (2D, décision actée).
-	reveal_panel = PanelContainer.new()
+	# Ma main : rangée d'icônes flottant juste au-dessus du panneau.
+	var mc := CenterContainer.new()
+	mc.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	mc.offset_top = -216
+	mc.offset_bottom = -164
+	layer.add_child(mc)
+	my_dice_box = HBoxContainer.new()
+	my_dice_box.add_theme_constant_override("separation", 10)
+	mc.add_child(my_dice_box)
+
+	# Panneau d'action en bas : hug content vers le haut (maquette HTML).
+	action_bar = UI.panel()
+	action_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	action_bar.offset_left = 12
+	action_bar.offset_right = -12
+	action_bar.offset_top = -14
+	action_bar.offset_bottom = -14
+	action_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	layer.add_child(action_bar)
+
+	var av := VBoxContainer.new()
+	av.add_theme_constant_override("separation", 11)
+	action_bar.add_child(av)
+
+	# pickrow : stepper quantité [−][N][+] + sélecteur de faces.
+	var pickrow := HBoxContainer.new()
+	pickrow.alignment = BoxContainer.ALIGNMENT_CENTER
+	pickrow.add_theme_constant_override("separation", 10)
+	av.add_child(pickrow)
+
+	var step := PanelContainer.new()
+	step.add_theme_stylebox_override("panel", UI.sb(UI.PANEL, UI.EDGE, 14, 2))
+	pickrow.add_child(step)
+	var sh := HBoxContainer.new()
+	sh.add_theme_constant_override("separation", 2)
+	step.add_child(sh)
+	var minus := _step_btn("−")
+	minus.pressed.connect(func() -> void: _set_qty(-1))
+	sh.add_child(minus)
+	qty_lbl = UI.label("1", 20, UI.INK, 700, true)
+	qty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	qty_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	qty_lbl.custom_minimum_size = Vector2(46, 42)
+	sh.add_child(qty_lbl)
+	var plus := _step_btn("+")
+	plus.pressed.connect(func() -> void: _set_qty(1))
+	sh.add_child(plus)
+
+	var face_row := HBoxContainer.new()
+	face_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	face_row.add_theme_constant_override("separation", 7)
+	pickrow.add_child(face_row)
+	for v in 6:
+		var ic := UI.DieIcon.new(v + 1, 34)
+		ic.mouse_filter = Control.MOUSE_FILTER_STOP
+		var face := v + 1
+		ic.gui_input.connect(func(ev: InputEvent) -> void:
+			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
+				or (ev is InputEventScreenTouch and ev.pressed)
+			if tap:
+				_set_face(face))
+		face_icons.append(ic)
+		face_row.add_child(ic)
+
+	# btnrow : trois actions à largeur égale (comme la maquette).
+	var btnrow := HBoxContainer.new()
+	btnrow.alignment = BoxContainer.ALIGNMENT_CENTER
+	btnrow.add_theme_constant_override("separation", 9)
+	av.add_child(btnrow)
+
+	bid_btn = UI.button("Enchérir", "primary")
+	bid_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bid_btn.pressed.connect(func() -> void: Net.bid(qty_val, val_face))
+	btnrow.add_child(bid_btn)
+	dudo_btn = UI.button("Dudo !", "dudo")
+	dudo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dudo_btn.pressed.connect(func() -> void: Net.dudo())
+	btnrow.add_child(dudo_btn)
+	calza_btn = UI.button("Calza !", "calza")
+	calza_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	calza_btn.pressed.connect(func() -> void: Net.calza())
+	btnrow.add_child(calza_btn)
+
+	_set_face(1)
+
+	# Overlay de révélation « night club » : dégradé bleu nuit opaque, orbes
+	# lumineux, trame de pois claire, halo coloré derrière le titre.
+	reveal_panel = Control.new()
+	reveal_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	reveal_panel.visible = false
-	reveal_panel.set_anchors_preset(Control.PRESET_CENTER)
-	reveal_panel.custom_minimum_size = Vector2(560, 0)
 	layer.add_child(reveal_panel)
-	reveal_lbl = _label(24, HORIZONTAL_ALIGNMENT_CENTER)
-	reveal_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	reveal_panel.add_child(reveal_lbl)
 
-	# Overlay fin de partie.
-	over_panel = PanelContainer.new()
+	var rbg_tex := TextureRect.new()
+	rbg_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rbg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	rbg_tex.stretch_mode = TextureRect.STRETCH_SCALE
+	var grad := Gradient.new()
+	grad.set_color(0, Color("#0E1530"))
+	grad.set_color(1, Color("#1E2B52"))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	gt.width = 32
+	gt.height = 256
+	gt.fill = GradientTexture2D.FILL_LINEAR
+	gt.fill_from = Vector2(0.5, 0.0)
+	gt.fill_to = Vector2(0.5, 1.0)
+	rbg_tex.texture = gt
+	reveal_panel.add_child(rbg_tex)
+
+	for o in [
+		[Vector2(-120, 120), Color("#3FC8EC"), 0.22, 340.0],
+		[Vector2(430, 560), Color("#7BC94E"), 0.18, 400.0],
+		[Vector2(-60, 980), Color("#FFB45F"), 0.15, 330.0],
+	]:
+		var orb := UI.orb(Color(o[1], o[2]), o[3])
+		orb.position = o[0]
+		reveal_panel.add_child(orb)
+
+	# Halo derrière le titre — teinté rouge ou vert à l'événement.
+	reveal_glow = UI.orb(Color(1, 1, 1, 0.0), 420.0)
+	reveal_glow.position = Vector2(-60, -230)
+	reveal_panel.add_child(reveal_glow)
+
+	var rdots := UI.Dots.new()
+	rdots.col = Color(1, 1, 1, 0.06)
+	reveal_panel.add_child(rdots)
+
+	var rmargin := MarginContainer.new()
+	rmargin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rmargin.add_theme_constant_override("margin_top", 96)
+	rmargin.add_theme_constant_override("margin_left", 22)
+	rmargin.add_theme_constant_override("margin_right", 22)
+	reveal_panel.add_child(rmargin)
+
+	var rv := VBoxContainer.new()
+	rv.add_theme_constant_override("separation", 20)
+	rmargin.add_child(rv)
+
+	reveal_title = UI.label("DUDO !", 58, Color("#FF6E66"), 700, true)
+	reveal_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reveal_title.add_theme_constant_override("shadow_offset_x", 0)
+	reveal_title.add_theme_constant_override("shadow_offset_y", 5)
+	reveal_title.resized.connect(func() -> void:
+		reveal_title.pivot_offset = reveal_title.size / 2.0)
+	rv.add_child(reveal_title)
+
+	reveal_sub = UI.label("", 14, Color("#9AA7C6"), 800)
+	reveal_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reveal_sub.uppercase = true
+	rv.add_child(reveal_sub)
+
+	var bidc := CenterContainer.new()
+	rv.add_child(bidc)
+	var bid_p := PanelContainer.new()
+	var bid_sb := UI.sb(Color(1, 1, 1, 0.08), Color(1, 1, 1, 0.22), 18, 1)
+	bid_sb.content_margin_left = 26
+	bid_sb.content_margin_right = 26
+	bid_sb.content_margin_top = 12
+	bid_sb.content_margin_bottom = 12
+	bid_p.add_theme_stylebox_override("panel", bid_sb)
+	bidc.add_child(bid_p)
+	reveal_bid_line = HBoxContainer.new()
+	reveal_bid_line.alignment = BoxContainer.ALIGNMENT_CENTER
+	reveal_bid_line.add_theme_constant_override("separation", 10)
+	bid_p.add_child(reveal_bid_line)
+
+	reveal_dice_box = VBoxContainer.new()
+	reveal_dice_box.add_theme_constant_override("separation", 18)
+	rv.add_child(reveal_dice_box)
+
+	reveal_count = UI.label("0", 44, Color("#63D97A"), 700, true)
+	reveal_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	reveal_count.add_theme_color_override("font_shadow_color", Color(0.24, 0.9, 0.42, 0.35))
+	reveal_count.add_theme_constant_override("shadow_offset_y", 3)
+	reveal_count.resized.connect(func() -> void:
+		reveal_count.pivot_offset = reveal_count.size / 2.0)
+	rv.add_child(reveal_count)
+
+	reveal_verdict = UI.label("", 17, Color("#E9EDF7"), 800)
+	reveal_verdict.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rv.add_child(reveal_verdict)
+
+	reveal_verdict_sub = UI.label("", 14, Color("#9AA7C6"), 700)
+	reveal_verdict_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rv.add_child(reveal_verdict_sub)
+
+	# « Continuer » : capsule blanche centrée — remplissage bleu clair
+	# avec liseré droit bleu, timer de 10 s déguisé.
+	var wrapc := CenterContainer.new()
+	rv.add_child(wrapc)
+	var wrap := Control.new()
+	wrap.custom_minimum_size = Vector2(340, 58)
+	wrapc.add_child(wrap)
+	var rbg := PanelContainer.new()
+	rbg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rbg.add_theme_stylebox_override("panel", UI.sb(UI.PANEL, UI.EDGE, 29, 1, 3))
+	wrap.add_child(rbg)
+	reveal_fill = PanelContainer.new()
+	reveal_fill.anchor_bottom = 1.0
+	reveal_fill.offset_right = 0.0
+	reveal_fill.clip_contents = true
+	var fsb := UI.sb(Color(UI.BLUE, 0.3), UI.BLUE, 29, 0)
+	fsb.border_width_right = 3
+	reveal_fill.add_theme_stylebox_override("panel", fsb)
+	wrap.add_child(reveal_fill)
+	var rbtn_lbl := UI.label("Continuer", 19, UI.BLUE, 800)
+	rbtn_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rbtn_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rbtn_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	wrap.add_child(rbtn_lbl)
+	var rbtn := Button.new()
+	rbtn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var transparent := UI.sb(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 29, 0)
+	for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+		rbtn.add_theme_stylebox_override(st, transparent)
+	rbtn.pressed.connect(_hide_reveal)
+	wrap.add_child(rbtn)
+
+	var hint := UI.label("La manche reprend automatiquement", 13, Color("#7E8BAE"), 700)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rv.add_child(hint)
+
+	# Overlay fin de partie (au-dessus de la révélation).
+	over_panel = UI.panel()
 	over_panel.visible = false
 	over_panel.set_anchors_preset(Control.PRESET_CENTER)
+	over_panel.custom_minimum_size.x = 440
 	layer.add_child(over_panel)
-	var vb := VBoxContainer.new()
-	over_panel.add_child(vb)
-	over_lbl = _label(30, HORIZONTAL_ALIGNMENT_CENTER)
-	vb.add_child(over_lbl)
-	rematch_btn = _button("Revanche", vb)
-	rematch_btn.pressed.connect(func() -> void: Net.rematch())
-	var back_btn := _button("Retour au menu", vb)
-	back_btn.pressed.connect(func() -> void:
-		Net.leave()
-		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
-
-func _label(size: int, align: HorizontalAlignment) -> Label:
-	var l := Label.new()
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
-	l.add_theme_constant_override("shadow_offset_x", 2)
-	l.add_theme_constant_override("shadow_offset_y", 2)
-	l.horizontal_alignment = align
-	return l
-
-func _button(text: String, parent: Container) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(0, 64)
-	b.add_theme_font_size_override("font_size", 26)
-	parent.add_child(b)
-	return b
+	over_box = VBoxContainer.new()
+	over_box.add_theme_constant_override("separation", 12)
+	over_panel.add_child(over_box)
 
 func _process(delta: float) -> void:
 	sway_t += delta

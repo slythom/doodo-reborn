@@ -55,60 +55,64 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 
 ## 7. Charte UI / HUD (2D)
 
-*But : une UI « casino moderne » — sombre, propre, premium — qui contraste avec le cartoon de la scène 3D sans la trahir. Référence : apps de poker mobiles (HUD sombre bleu nuit, sans-serif géométrique, accents dorés).*
+*But : une UI « Wii Sports » — claire, joyeuse, tactile — qui prolonge naturellement le cartoon/Mii de la scène 3D. Référence : menus Wii (fonds ivoire, boutons « soft plastic », couleurs joueur). **Portrait uniquement** — pas de layout paysage.*
 
-### Palette (fond sombre bleu nuit)
+### Palette (fond clair ivoire)
 
 | Rôle | Couleur | Usage |
 |---|---|---|
-| Fond | `#0E1A2B` (bleu nuit profond) | fond d'écran, scrim atténué |
-| Surface | `#182A45` | panneaux, cartes, barre d'actions |
-| Bordure | `#2A3E5F` | liserés de panneaux, séparateurs |
-| Texte | `#F4EDDC` (crème) | jamais de blanc pur — trop froid |
-| Texte secondaire | `#9AA7BD` (bleu-gris) | labels discrets, code de salle |
-| Accent vert | `#35A466` (feutrine éclairci pour le sombre) | actions principales, Calza, focus |
-| Accent sombre | `#1F5C33` | liseré des boutons verts |
-| Vert clair | `#5FD696` | texte/anneaux sur fond sombre |
-| Danger / Dudo | `#E2472F` (tomate vif) | action Dudo, élimination, erreurs |
-| Ambre | `#F2B33D` | badge « À toi », timer, Palifico, jetons |
-| Chips joueur | fond `#1D3B6E` + texte doré `#E8C96A` | pastille pseudo + compte de dés |
-| Neutre | `#42536F` | boutons secondaires, états inactifs |
+| Fond | `#EEF2F7` (ivoire bleuté) | écrans, scrim laiteux |
+| Panneau | `#FFFFFF` | cartes, barre d'actions, pills |
+| Bordure | `#DDE3EB` | liserés de panneaux, champs |
+| Biseau bouton | `#D3D9E1` | bord inférieur 3 px (effet « soft plastic ») |
+| Texte | `#3C4048` | jamais de noir pur |
+| Texte secondaire | `#8A919E` | labels discrets, code de salle |
+| Accent bleu Wii | `#2FA8D8` (sombre `#1E86B0`, clair `#55C8EC`) | action principale, focus, titre, remplissage Continuer |
+| Badge tour | `#FF9D3C` (bord `#DE8A2E`) | « À TOI DE JOUER ! », Palifico |
+| Dudo | `#F25C54` (bord `#D94A42`) | action Dudo, titre DUDO! |
+| Calza | `#67BB45` (bord `#55A738`) | action Calza, dés concordants, titre CALZA! |
+| Ambre doux | `#FFC94D` | accents chauds secondaires |
+| Couleurs joueur | bleu `#2E8BE6` · rouge `#E64A3C` · vert `#3FAF49` · jaune `#F5C518` · violet `#8E5BB5` · orange `#F28C28` | chips pseudo + badge compteur de dés (par siège) |
+| Pips des dés | `#232B40` | faces de dés (ivoire `#FFFFFF`) |
 
 ### Typographie
 
-- **Inter** (SIL OFL, accents FR complets) — propre, géométrique, lisible en petit. Poids : SemiBold 600 titres/boutons, Medium 500 corps, Regular 400 secondaire. Alternative si changement : Manrope ou Outfit (même famille d'esprit).
-- Échelle (portrait 720×1280) : titre écran 52 · panneau 32 · boutons 28 · labels/corps 22 · secondaire 17.
+- **Fredoka** (SIL OFL, variable wght) — display : titres, badges, chiffres d'enchère, « DUDO ! ». Ronde et grasse, c'est l'ADN Wii.
+- **Nunito** (SIL OFL, variable wght) — corps, boutons, chips. Ronde, très lisible.
+- Échelle (portrait 720×1280) : titre écran 60-64 · titre overlay 54 · enchère 34 · boutons 26 · corps 20-22 · secondaire 15-18.
 - Les **dés s'affichent en icônes de faces** (pips), pas en chiffre. Une enchère se lit « 5 × ⚄ », pas « 5 x 4 ».
 
 ### Widgets
 
-- **Boutons** : plats, radius 12, fond surface ou accent + bordure 1 px de la variante claire ; pressé = légère assombrissement ; désactivé = opacité 40 %. Pas de « bouton physique » — le style reste plat et moderne.
-- **Cibles tactiles ≥ 48 px** partout (doigts, pas souris).
-- **Panneaux** : radius 14, fond `#182A45`, bordure `#2A3E5F` 1 px, ombre portée discrète.
-- **Chips joueur** : pill bleu `#1D3B6E`, pseudo Inter Medium + compte de dés en doré `#E8C96A`.
-- **Champs de saisie** : fond `#0E1A2B`, bord `#2A3E5F`, focus → bord accent vert.
+- **Boutons « soft plastic »** : fond uni, radius 18, **biseau inférieur 3 px** de la teinte sombre de la variante ; pressé = biseau réduit à 1 px + teinte assombrie ; désactivé = opacité 45 %.
+- Variantes : `primary` (bleu Wii plein, texte blanc), `btn` (blanc cassé, texte encre — secondaire/neutre), `dudo` (rouge), `calza` (vert).
+- **Cibles tactiles ≥ 48 px** partout (≈56 px boutons, 46 px icônes de faces).
+- **Panneaux** : blancs, radius 20, bordure `#DDE3EB` + biseau léger.
+- **Chips joueur** : pill couleur du siège, pseudo blanc — un joueur = une couleur partout (scène, chip, badge).
+- **Champs de saisie** : fond blanc, bord 2 px clair ; focus → bord bleu Wii.
+- **Badge compteur de dés** : gros chiffre à la couleur du joueur posé au-dessus de son gobelet (Label3D) — lisible de loin, plus de texte « N dé(s) ».
 
 ### HUD (portrait, zones)
 
-- **Haut** : code de salle discret (texte secondaire) + badge « À toi ! » ambre qui pulse ; timer de tour en anneau ambre autour du badge quand actif.
-- **Bas** : barre d'actions sur 2 lignes (déjà en place) — sélecteurs quantité/valeur + `Enchérir` (accent vert), `Dudo` (rouge) / `Calza` (vert) / `Quitter` (neutre).
-- **Toasts** : notices (chat, éliminations, « X regagne un dé ») en pills bleu nuit à bordure fine, éphémères haut-centre.
+- **Haut, centré** : code de salle discret → **badge « À TOI DE JOUER ! » orange** qui pulse (sinon « Tour de X » en pill blanche) → **enchère en cours** dans une pill blanche : quantité Fredoka + icône de face + chip de l'enchérisseur ; pill ambre PALIFICO quand actif.
+- **Bas** : panneau blanc arrondi sur 4 lignes — toasts éphémères · **ma main en icônes de dés 2D** (plus de dés 3D sur la table) · **sélecteur de face = 6 icônes cliquables** (la choisie cerclée bleu, les autres à 45 %) · quantité + `Enchérir` (bleu) · `Dudo` (rouge) / `Calza` (vert) / `Quitter` (blanc).
+- **Toasts** : pills blanches éphémères en tête du panneau (chat, éliminations).
+- Le joueur éliminé **quitte la table** (son Mii disparaît) plutôt qu'un simple atténuement.
 
 ### Écran de révélation (Dudo/Calza) — le moment clé
 
-- **Scrim** `#0E1A2B` à 80 % + panneau surface centré ; titre `DUDO !` (rouge) ou `CALZA !` (vert) en Inter Bold ~64 **avec léger effet néon/pulse** (halo teinté dont l'alpha oscille, scale 1.0→1.03 — pas de squash cartoon, on reste premium).
-- L'enchère contestée affichée grande : quantité + icône de face + chip pseudo de l'enchérisseur.
-- **Dés alignés par joueur** : une ligne par joueur (chip bleu + pseudo doré), la sienne en premier ; dés en icônes de faces.
-- **Comptage animé** : les dés concordants (valeur + pacos jokers) s'illuminent un à un (anneau vert clair + léger zoom), le compteur monte en parallèle.
-- **Verdict** : « Il y en a **6** — l'enchère tient ! » puis « sly1 perd un dé ».
-- **Dismiss** : bouton « Continuer » **qui se remplit d'ambre de gauche à droite sur 10 s** — visuellement un timer déguisé ; tap = passer immédiatement, expiration = fermeture auto puis manche suivante.
-- Version « toutes les mains » identique pour les spectateurs.
+- **Scrim blanc laiteux** (~74 %) — la scène respire dessous ; panneau blanc centré.
+- Titre `DUDO !` (rouge) ou `CALZA !` (vert) Fredoka 54 — **pop avec rebond** (scale 0 → 1, TRANS_BACK).
+- L'enchère contestée : « Enchère : N × icône » centrée sous le titre.
+- **Dés alignés par joueur** : une ligne par joueur (chip couleur siège + icônes 34 px).
+- **Comptage animé** : les dés concordants (face + pacos jokers) s'illuminent un à un — anneau vert + remontée d'opacité — toutes les 0,4 s, compteur `= N` en vert qui grimpe en parallèle.
+- **Verdict** : « X perd un dé » (depuis l'événement die_lost).
+- **Dismiss** : bouton « Continuer » **qui se remplit de bleu de gauche à droite sur 10 s** — timer déguisé ; tap = passer, expiration = fermeture auto.
 
 ---
-
 ## 8. Points ouverts / à trancher plus tard
 
-- **Révélation Dudo/Calza : 3D ou écran 2D ?** — remarque : faire la révélation dans un **écran 2D dédié** pourrait être plus lisible (tous les dés alignés, comptage affiché) et plus simple que d'animer la révélation de tous les gobelets en 3D — qui souffre déjà de défauts visuels (dés qui dépassent du gobelet). À trancher lors de la spec technique. Le rendu 3D des dés au centre de la table resterait nécessaire de toute façon pour le lancer.
+- ~~**Révélation Dudo/Calza : 3D ou écran 2D ?**~~ — **tranché : écran 2D dédié** (implémenté, §7). Reste à décider si le lancer de dés de manche se fait en 3D sur la table ou en animation 2D.
 - **Toon shading** (ramp + rim light) : optionnel, à évaluer visuellement — non nécessaire pour l'instant.
 - Expressions par **textures swapables** plutôt que meshes 3D : si le nombre de visages/expressions explose (émotions fines), une texture de visage sur la tête devient plus souple que des groupes de meshes.
 - Fenêtre : ajouter silhouettes de gratte-ciels éclairés pour vendre l'ambiance nocturne (léger, gros impact).
