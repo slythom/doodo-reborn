@@ -4,13 +4,20 @@ extends RefCounted
 # Charte « Wii » — specs_artistiques.md §7.
 # Palette, styles, icônes de dés vectorielles : tout est généré en code.
 
-# ---- Palette ----
-const BG := Color("#EEF2F7")            # ivoire bleuté
-const PANEL := Color("#FFFFFF")
-const EDGE := Color("#DDE3EB")          # bordures claires
-const EDGE_DK := Color("#D3D9E1")       # biseau inférieur boutons
-const INK := Color("#3C4048")           # texte (jamais de noir pur)
-const DIM := Color("#8A919E")           # secondaire
+# ---- Palette : neutres thémables (clair/sombre) + accents fixes ----
+static var dark := false                # thème courant (menu : switch)
+
+static var BG := Color("#EEF2F7")       # fond d'écran
+static var PANEL := Color("#FFFFFF")    # cartes, pills, boutons neutres
+static var EDGE := Color("#DDE3EB")     # bordures
+static var EDGE_DK := Color("#D3D9E1")  # biseau inférieur boutons
+static var INK := Color("#3C4048")      # texte (jamais de noir pur)
+static var DIM := Color("#8A919E")      # secondaire
+static var BEVEL_NEUTRAL := Color(0.16, 0.19, 0.26, 0.35) # biseau des boutons bordés
+static var SHADOW := Color(0.16, 0.19, 0.26, 0.3)         # ombre des panneaux
+static var DOT_COL := Color(0.24, 0.25, 0.28, 0.07)       # trame de pois
+
+# Accents — identiques dans les deux thèmes (saturés, lisibles sur les deux).
 const BLUE := Color("#2FA8D8")          # bleu Wii — accent principal
 const BLUE_HI := Color("#55C8EC")
 const BLUE_DK := Color("#1E86B0")
@@ -24,7 +31,43 @@ const AMBER := Color("#FFC94D")
 # Couleurs joueur façon Wii (P1..P6 par siège).
 const PLAYER: Array[Color] = [Color("#2E8BE6"), Color("#E64A3C"), Color("#3FAF49"),
 	Color("#F5C518"), Color("#8E5BB5"), Color("#F28C28")]
-const PIP := Color("#232B40")           # pips des dés
+const PIP := Color("#232B40")           # pips des dés (faces blanches)
+
+# Bascule clair/sombre : réécrit les neutres. Les accents ne bougent pas.
+# Les contrôles déjà construits gardent leur style — le switch reconstruit
+# l'écran courant (menu) ; les autres scènes lisent la palette au chargement.
+static func set_dark(b: bool, persist := true) -> void:
+	dark = b
+	if dark:
+		BG = Color("#131A29")
+		PANEL = Color("#202B3E")
+		EDGE = Color("#34425C")
+		EDGE_DK = Color("#151D2E")
+		INK = Color("#E9EEF8")
+		DIM = Color("#8C97AB")
+		BEVEL_NEUTRAL = Color(0.0, 0.0, 0.0, 0.5)
+		SHADOW = Color(0.0, 0.0, 0.0, 0.55)
+		DOT_COL = Color(1.0, 1.0, 1.0, 0.05)
+	else:
+		BG = Color("#EEF2F7")
+		PANEL = Color("#FFFFFF")
+		EDGE = Color("#DDE3EB")
+		EDGE_DK = Color("#D3D9E1")
+		INK = Color("#3C4048")
+		DIM = Color("#8A919E")
+		BEVEL_NEUTRAL = Color(0.16, 0.19, 0.26, 0.35)
+		SHADOW = Color(0.16, 0.19, 0.26, 0.3)
+		DOT_COL = Color(0.24, 0.25, 0.28, 0.07)
+	if persist:
+		var cfg := ConfigFile.new()
+		cfg.set_value("display", "dark", dark)
+		cfg.save("user://settings.cfg")
+
+# Restaure le thème choisi (appelé au démarrage de chaque écran).
+static func load_theme() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		set_dark(bool(cfg.get_value("display", "dark", false)), false)
 
 const FONT_UI := "res://assets/fonts/Nunito.ttf"
 const FONT_DISP := "res://assets/fonts/Fredoka.ttf"
@@ -63,7 +106,7 @@ static func sb(bg: Color, border: Color = EDGE, radius := 18, bw := 1, bevel := 
 	if bevel > 0:
 		# Biseau inférieur : teinte sombre de la variante si la bordure n'est
 		# pas dessinée (bw=0), sinon gris foncé translucide — jamais blanc.
-		s.shadow_color = border if bw == 0 else Color(0.16, 0.19, 0.26, 0.35)
+		s.shadow_color = border if bw == 0 else BEVEL_NEUTRAL
 		s.shadow_size = 1
 		s.shadow_offset = Vector2(0, bevel)
 	return s
@@ -100,8 +143,8 @@ static func button(text: String, kind := "btn") -> Button:
 			b.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.85))
 			b.add_theme_stylebox_override("hover", sb(GREEN.lightened(0.08), GREEN_DK, 18, 0, 3))
 			b.add_theme_stylebox_override("pressed", sb(GREEN_DK, GREEN_DK, 18, 0, 1))
-		_: # btn blanc
-			n = sb(Color("#F5F7FA"), EDGE, 18, 1, 3)
+		_: # btn neutre (blanc en clair, ardoise en sombre)
+			n = sb(PANEL, EDGE, 18, 1, 3)
 			_btn_colors(b, INK)
 			b.add_theme_stylebox_override("hover", sb(PANEL, BLUE, 18, 2, 3))
 			b.add_theme_stylebox_override("pressed", sb(EDGE, EDGE, 18, 1, 1))
@@ -170,11 +213,11 @@ static func label(text: String, size := 22, color: Color = INK, wght := 600, dis
 	l.add_theme_color_override("font_color", color)
 	return l
 
-# Panneau blanc : bordure claire + vraie ombre portée (lisible sur scène claire).
+# Panneau : bordure claire + vraie ombre portée (thémé : blanc ou ardoise).
 static func panel() -> PanelContainer:
 	var p := PanelContainer.new()
 	var s := sb(PANEL, EDGE, 20, 1)
-	s.shadow_color = Color(0.16, 0.19, 0.26, 0.3)
+	s.shadow_color = SHADOW
 	s.shadow_size = 10
 	s.shadow_offset = Vector2(0, 4)
 	p.add_theme_stylebox_override("panel", s)
@@ -213,9 +256,10 @@ class Dots:
 	extends Control
 	var spacing := 34.0
 	var radius := 2.2
-	var col := Color(0.24, 0.25, 0.28, 0.07)
+	var col: Color
 
 	func _init() -> void:
+		col = UI.DOT_COL
 		set_anchors_preset(Control.PRESET_FULL_RECT)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -230,10 +274,10 @@ class Dots:
 class CircleBadge:
 	extends Control
 	var text := ""
-	var col := BLUE
+	var col := UI.BLUE
 	var side := 40.0
 
-	func _init(t := "", c := BLUE, s := 40.0) -> void:
+	func _init(t := "", c := UI.BLUE, s := 40.0) -> void:
 		text = t
 		col = c
 		side = s
@@ -260,7 +304,7 @@ class DieIcon:
 	var value := 1
 	var size_px := 44
 	var die_bg := Color("#FFFFFF")
-	var pip := PIP
+	var pip := UI.PIP
 	var glow := false  # surbrillance : face verte, pips blancs (dé concordant)
 	var sel := false   # anneau bleu (sélecteur de face)
 
@@ -272,14 +316,14 @@ class DieIcon:
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, Vector2(size_px, size_px))
 		if sel:
-			draw_rect(r.grow(4), BLUE, false, 3.0, true)
+			draw_rect(r.grow(4), UI.BLUE, false, 3.0, true)
 		var face_col := die_bg
 		var pip_col := pip
-		var edge_col := EDGE
+		var edge_col := UI.EDGE
 		if glow:
-			face_col = GREEN
+			face_col = UI.GREEN
 			pip_col = Color.WHITE
-			edge_col = GREEN_DK
+			edge_col = UI.GREEN_DK
 		var sbx := StyleBoxFlat.new()
 		sbx.bg_color = face_col
 		sbx.border_color = edge_col
@@ -313,3 +357,71 @@ class DieIcon:
 		}
 		for p in pos.get(clampi(value, 1, 6), pos[1]):
 			draw_circle(p, pip_r, pip_col)
+
+# ---- ThemeSwitch : interrupteur clair/sombre (pill + knob animé) ----
+# Icône dessinée : soleil (clair) quand off, croissant de lune quand on.
+class ThemeSwitch:
+	extends Control
+	signal toggled(on: bool)
+
+	var on := false
+	var _kx := 0.0 # position du knob : 0 = gauche (clair), 1 = droite (sombre)
+	const W := 88.0
+	const H := 42.0
+
+	func _init(initial := false) -> void:
+		on = initial
+		_kx = 1.0 if on else 0.0
+		custom_minimum_size = Vector2(W, H)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		focus_mode = Control.FOCUS_ALL
+
+	func set_on(v: bool) -> void:
+		if on == v:
+			return
+		on = v
+		toggled.emit(on)
+		var t := create_tween()
+		t.tween_method(_set_knob, _kx, 1.0 if on else 0.0, 0.22) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+	func _set_knob(x: float) -> void:
+		_kx = x
+		queue_redraw()
+
+	func _gui_input(ev: InputEvent) -> void:
+		var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
+			or (ev is InputEventScreenTouch and ev.pressed) \
+			or ev.is_action_pressed("ui_accept")
+		if tap:
+			accept_event()
+			set_on(not on)
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_FOCUS_ENTER or what == NOTIFICATION_FOCUS_EXIT:
+			queue_redraw()
+
+	func _draw() -> void:
+		# Rail : ardoise nuit quand actif, gris-bleu quand inactif.
+		var track := UI.sb(Color("#26324A") if on else Color("#C7D3E2"), Color(0, 0, 0, 0), int(H / 2), 0)
+		track.draw(get_canvas_item(), Rect2(Vector2.ZERO, Vector2(W, H)))
+		if has_focus():
+			var fr := UI.sb(Color(0, 0, 0, 0), UI.BLUE, int(H / 2), 3)
+			fr.draw(get_canvas_item(), Rect2(Vector2.ZERO, Vector2(W, H)).grow(3))
+		# Knob blanc glissant, avec icône soleil/lune.
+		var kr := H / 2.0 - 5.0
+		var kc := Vector2(lerpf(kr + 5.0, W - kr - 5.0, _kx), H / 2.0)
+		draw_circle(kc + Vector2(0, 2), kr, Color(0, 0, 0, 0.18))
+		draw_circle(kc, kr, Color.WHITE)
+		draw_arc(kc, kr - 1.0, 0.0, TAU, 40, UI.EDGE_DK, 1.5, true)
+		if on:
+			# Croissant : disque ardoise + disque blanc décalé.
+			draw_circle(kc, kr * 0.5, Color("#4A5B80"))
+			draw_circle(kc + Vector2(kr * 0.22, -kr * 0.14), kr * 0.4, Color.WHITE)
+		else:
+			# Soleil : disque orange + 8 rayons.
+			var sc := Color("#FF9D3C")
+			draw_circle(kc, kr * 0.38, sc)
+			for i in 8:
+				var dir := Vector2.from_angle(i * PI / 4.0)
+				draw_line(kc + dir * kr * 0.55, kc + dir * kr * 0.8, sc, 2.5, true)

@@ -18,6 +18,7 @@ var _pending_code := ""
 static var _e2e_started := false
 
 func _ready() -> void:
+	UI.load_theme()
 	_build_ui()
 	Net.connection_opened.connect(func() -> void:
 		var pseudo := _name_edit.text.strip_edges()
@@ -100,7 +101,8 @@ func _build_ui() -> void:
 	d2.rotation_degrees = 9
 	logo.add_child(d2)
 	# Le titre flotte doucement (wobble infini, écran d'accueil Wii).
-	var wob := create_tween().set_loops()
+	# Bindé à title : le tween meurt avec le nœud (rebuild du thème).
+	var wob := title.create_tween().set_loops()
 	wob.tween_property(title, "scale", Vector2(1.04, 1.04), 1.4).set_trans(Tween.TRANS_SINE)
 	wob.parallel().tween_property(title, "rotation_degrees", -1.2, 1.4).set_trans(Tween.TRANS_SINE)
 	wob.tween_property(title, "scale", Vector2.ONE, 1.4).set_trans(Tween.TRANS_SINE)
@@ -165,6 +167,22 @@ func _build_ui() -> void:
 	_status = UI.label("", 18, UI.RED_DK)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_home.add_child(_status)
+
+	# Switch thème clair/sombre en bas de la carte.
+	var theme_row := HBoxContainer.new()
+	theme_row.add_theme_constant_override("separation", 10)
+	cv.add_child(theme_row)
+	var tl := UI.label("Mode sombre", 18, UI.INK, 700)
+	tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	theme_row.add_child(tl)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	theme_row.add_child(spacer)
+	var sw := UI.ThemeSwitch.new(UI.dark)
+	sw.toggled.connect(func(on: bool) -> void:
+		UI.set_dark(on)
+		_rebuild())
+	theme_row.add_child(sw)
 
 	UI.pop_in(_home_card)
 
@@ -232,6 +250,19 @@ func _line_edit(placeholder: String, maxlen: int) -> LineEdit:
 	e.add_theme_stylebox_override("normal", UI.sb(UI.PANEL, UI.EDGE, 18, 2))
 	e.add_theme_stylebox_override("focus", UI.sb(UI.PANEL, UI.BLUE, 18, 2))
 	return e
+
+# Reconstruit l'écran après bascule de thème (les styles sont cuits à la
+# construction — on recrée tout en préservant les saisies et le lobby).
+func _rebuild() -> void:
+	var typed := _name_edit.text
+	var code := _code_edit.text
+	for c in get_children():
+		c.queue_free()
+	_build_ui()
+	_name_edit.text = typed
+	_code_edit.text = code
+	if Net.view.get("state") == "lobby":
+		_on_view(Net.view)
 
 func _set_status(t: String, col := UI.RED_DK) -> void:
 	_status.text = t

@@ -77,6 +77,7 @@ func _mesh(mesh: PrimitiveMesh, color: Color, pos: Vector3, roughness := 0.8, em
 	return mi
 
 func _ready() -> void:
+	UI.load_theme()
 	randomize()
 	splat_tex = _make_splat_texture()
 	_environment()
@@ -276,7 +277,7 @@ func _update_turn() -> void:
 		turn_lbl.visible = true
 		if not _turn_was_mine:
 			UI.punch(turn_lbl, 0.3)
-		_turn_tween = create_tween().set_loops()
+		_turn_tween = turn_lbl.create_tween().set_loops()
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 0.55, 0.45)
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 1.0, 0.45)
 	elif turn >= 0:
@@ -372,7 +373,7 @@ func _step_btn(t: String) -> Button:
 	var tr := UI.sb(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 10, 0)
 	for st in ["normal", "pressed", "focus", "disabled"]:
 		b.add_theme_stylebox_override(st, tr)
-	b.add_theme_stylebox_override("hover", UI.sb(Color("#E4F5FD"), Color(0, 0, 0, 0), 10, 0))
+	b.add_theme_stylebox_override("hover", UI.sb(Color(UI.BLUE, 0.16), Color(0, 0, 0, 0), 10, 0))
 	return b
 
 func _set_qty(delta: int) -> void:
@@ -453,7 +454,7 @@ func _show_reveal(e: Dictionary) -> void:
 	# Le halo respire en boucle.
 	if _glow_pulse:
 		_glow_pulse.kill()
-	_glow_pulse = create_tween().set_loops()
+	_glow_pulse = reveal_glow.create_tween().set_loops()
 	_glow_pulse.tween_property(reveal_glow, "modulate:a", 0.36, 1.2)
 	_glow_pulse.tween_property(reveal_glow, "modulate:a", 0.18, 1.2)
 
@@ -530,7 +531,7 @@ func _show_reveal(e: Dictionary) -> void:
 	get_tree().create_timer(0.6).timeout.connect(func() -> void:
 		if gen != reveal_gen or _wobble_tween:
 			return
-		_wobble_tween = create_tween().set_loops()
+		_wobble_tween = reveal_title.create_tween().set_loops()
 		_wobble_tween.tween_property(reveal_title, "scale", Vector2(1.04, 1.04), 1.1).set_trans(Tween.TRANS_SINE)
 		_wobble_tween.parallel().tween_property(reveal_title, "rotation_degrees", -1.0, 1.1).set_trans(Tween.TRANS_SINE)
 		_wobble_tween.tween_property(reveal_title, "scale", Vector2.ONE, 1.1).set_trans(Tween.TRANS_SINE)
@@ -685,7 +686,7 @@ func _hud() -> void:
 
 	title_lbl = UI.label("%s — %s" % [view.get("name", "Doodo"), view.get("code", "")], 15, UI.DIM, 800)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var tsb := UI.sb(Color(1, 1, 1, 0.66), Color(0, 0, 0, 0), 14, 0)
+	var tsb := UI.sb(Color(UI.PANEL, 0.66), Color(0, 0, 0, 0), 14, 0)
 	tsb.content_margin_top = 4
 	tsb.content_margin_bottom = 4
 	title_lbl.add_theme_stylebox_override("normal", tsb)
@@ -770,7 +771,10 @@ func _hud() -> void:
 	av.add_child(pickrow)
 
 	var step := PanelContainer.new()
-	step.add_theme_stylebox_override("panel", UI.sb(UI.PANEL, UI.EDGE, 14, 2))
+	var stsb := UI.sb(UI.PANEL, UI.EDGE, 14, 2)
+	stsb.content_margin_top = 4
+	stsb.content_margin_bottom = 4
+	step.add_theme_stylebox_override("panel", stsb)
 	pickrow.add_child(step)
 	var sh := HBoxContainer.new()
 	sh.add_theme_constant_override("separation", 2)
@@ -789,11 +793,11 @@ func _hud() -> void:
 
 	var face_row := HBoxContainer.new()
 	face_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	face_row.add_theme_constant_override("separation", 7)
+	face_row.add_theme_constant_override("separation", 6)
 	pickrow.add_child(face_row)
 	for v in 6:
-		var ic := UI.DieIcon.new(v + 1, 34)
-		ic.pivot_offset = Vector2(17, 17)
+		var ic := UI.DieIcon.new(v + 1, 48)
+		ic.pivot_offset = Vector2(24, 24)
 		ic.mouse_filter = Control.MOUSE_FILTER_STOP
 		var face := v + 1
 		ic.gui_input.connect(func(ev: InputEvent) -> void:
@@ -909,9 +913,10 @@ func _hud() -> void:
 	var wrap := Control.new()
 	wrap.custom_minimum_size = Vector2(340, 58)
 	wrapc.add_child(wrap)
+	# La capsule reste blanche dans les deux thèmes (overlay toujours nuit).
 	var rbg := PanelContainer.new()
 	rbg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	rbg.add_theme_stylebox_override("panel", UI.sb(UI.PANEL, UI.EDGE, 29, 1, 3))
+	rbg.add_theme_stylebox_override("panel", UI.sb(Color("#FFFFFF"), Color("#DCE3EE"), 29, 1, 3))
 	wrap.add_child(rbg)
 	reveal_fill = PanelContainer.new()
 	reveal_fill.anchor_bottom = 1.0
