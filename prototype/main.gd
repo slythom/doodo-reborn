@@ -150,8 +150,7 @@ func _build_seats() -> void:
 		seat["cup"] = cup
 
 		if offset == 0:
-			# Moi : mains + dés visibles (vue subjective, pas de Mii).
-			_build_my_hands()
+			# Moi : dés visibles en 2D (vue subjective, pas de Mii).
 			continue
 
 		# Adversaire : Mii aux variantes déterministes (dérivées du nom).
@@ -199,18 +198,6 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	sp.shaded = false
 	add_child(sp)
 	return {"sprite": sp, "badge": badge, "chip": chip}
-
-func _build_my_hands() -> void:
-	var skin := Color(0.95, 0.78, 0.6)
-	for side in [-1.0, 1.0]:
-		var hand := MeshInstance3D.new()
-		var hs := SphereMesh.new()
-		hs.radius = 0.045
-		hs.height = 0.09
-		hs.material = mat(skin, 0.55)
-		hand.mesh = hs
-		hand.position = Vector3(side * 0.45, TABLE_TOP_Y + 0.03, 1.3)
-		add_child(hand)
 
 # ---- Rafraîchissement depuis le snapshot ----
 
@@ -1113,7 +1100,10 @@ func _table() -> void:
 	leg.top_radius = 0.12
 	leg.bottom_radius = 0.18
 	leg.height = 0.75
-	add_child(_mesh(leg, Color(0.3, 0.18, 0.09), Vector3(0, 0.375, 0), 0.6))
+	# Piètement en fonte sombre — tranche avec le bois du gobelet.
+	var leg_mi := _mesh(leg, Color(0.13, 0.14, 0.17), Vector3(0, 0.375, 0), 0.35)
+	(leg_mi.mesh.material as StandardMaterial3D).metallic = 0.7
+	add_child(leg_mi)
 
 func _cup_mesh() -> MeshInstance3D:
 	var cm := CylinderMesh.new()
