@@ -26,6 +26,8 @@ type ClientMsg struct {
 	Target string `json:"target,omitempty"`
 	// room admin
 	Bot bool `json:"bot,omitempty"` // add_bot / remove_bot
+	// set_scene
+	Scene string `json:"scene,omitempty"`
 }
 
 // ---- Options de table (specs §1.3) ----
@@ -38,6 +40,23 @@ type Options struct {
 	Spectators     bool         `json:"spectators"`
 	GodMode        bool         `json:"god_mode"` // salles privées uniquement
 	Public         bool         `json:"public"`
+	Scene          string       `json:"scene"` // décor 3D, choisi en salle d'attente, figé au lancement
+}
+
+// DefaultScene est le décor utilisé quand la valeur demandée est absente ou
+// inconnue (vieux client, id retiré). specs_artistiques §3.
+const DefaultScene = "salon"
+
+// KnownScenes : ids de décor acceptés par le serveur. Le client garde les
+// builders 3D ; le serveur n'a besoin que de la liste des ids valides.
+var KnownScenes = map[string]bool{DefaultScene: true}
+
+// NormalizeScene retombe sur DefaultScene pour toute valeur absente ou inconnue.
+func NormalizeScene(s string) string {
+	if !KnownScenes[s] {
+		return DefaultScene
+	}
+	return s
 }
 
 // ---- Serveur -> client : enveloppe ----

@@ -13,6 +13,7 @@ var _room_lbl: Label
 var _code_lbl: Label
 var _players_box: VBoxContainer
 var _launch_btn: Button
+var _scene_opt: OptionButton
 var _pending := ""
 var _pending_code := ""
 static var _e2e_started := false
@@ -220,6 +221,29 @@ func _build_ui() -> void:
 	_players_box.add_theme_constant_override("separation", 8)
 	lv.add_child(_players_box)
 
+	# Décor 3D de la table : choisi par le créateur en salle d'attente,
+	# figé au lancement (specs §1.3/§4.1). Id stocké en metadata d'item.
+	var scene_row := HBoxContainer.new()
+	scene_row.add_theme_constant_override("separation", 10)
+	lv.add_child(scene_row)
+	var sl := UI.label("Décor", 18, UI.INK, 700)
+	sl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	scene_row.add_child(sl)
+	_scene_opt = OptionButton.new()
+	_scene_opt.custom_minimum_size = Vector2(0, 44)
+	_scene_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scene_opt.add_theme_font_override("font", UI.font_w(700))
+	_scene_opt.add_theme_font_size_override("font_size", 20)
+	_scene_opt.add_theme_color_override("font_color", UI.INK)
+	for s in [["salon", "Salon"]]:
+		_scene_opt.add_item(s[1])
+		_scene_opt.set_item_metadata(_scene_opt.item_count - 1, s[0])
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		_scene_opt.add_theme_stylebox_override(state, UI.sb(UI.PANEL, UI.EDGE if state == "normal" else UI.BLUE, 14, 2))
+	_scene_opt.item_selected.connect(func(i: int) -> void:
+		Net.set_scene(String(_scene_opt.get_item_metadata(i))))
+	scene_row.add_child(_scene_opt)
+
 	var bot_btn := UI.button("Ajouter un bot", "btn")
 	bot_btn.pressed.connect(func() -> void: Net.add_bot())
 	lv.add_child(bot_btn)
@@ -303,7 +327,13 @@ func _on_view(v: Dictionary) -> void:
 		_players_box.add_child(cc)
 		UI.pop_in(chip, idx * 0.08)
 		idx += 1
-	_launch_btn.visible = v.get("host", "") == Net.token
+	var is_host: bool = v.get("host", "") == Net.token
+	_launch_btn.visible = is_host
+	_scene_opt.disabled = not is_host
+	var scene_id := String(UI.obj(v.get("options")).get("scene", "salon"))
+	for i in _scene_opt.item_count:
+		if String(_scene_opt.get_item_metadata(i)) == scene_id:
+			_scene_opt.select(i)
 
 func _on_notice(d: Dictionary) -> void:
 	match d.get("kind", ""):

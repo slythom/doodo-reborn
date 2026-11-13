@@ -123,6 +123,37 @@ func TestJoinAndLaunch(t *testing.T) {
 	clk.fire(500) // déclenche les timers éventuels (bot)
 }
 
+func TestSetScene(t *testing.T) {
+	r, _, s := newRoom(t)
+	// L'option par défaut est propagée dans le snapshot.
+	if got := r.Opts.Scene; got != "salon" {
+		t.Fatalf("scene par défaut=%q, want salon", got)
+	}
+	if err := r.Join(&Member{ID: "u2", Name: "bob"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetScene("u2", "plage"); err != ErrNotHost {
+		t.Errorf("non-hôte change la scène: err=%v", err)
+	}
+	if err := r.SetScene("u1", "plage"); err != nil {
+		t.Fatal(err)
+	}
+	// Id inconnu → fallback salon (vieux client / id retiré).
+	if got := r.Opts.Scene; got != "salon" {
+		t.Errorf("scene inconnue normalisée=%q, want salon", got)
+	}
+	if err := r.Launch("u1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetScene("u1", "salon"); err != ErrAlreadyStarted {
+		t.Errorf("scène après lancement: err=%v, want ErrAlreadyStarted", err)
+	}
+	views := s.viewsFor("u1")
+	if len(views) == 0 || views[len(views)-1].Options.Scene != "salon" {
+		t.Errorf("le snapshot ne propage pas options.scene")
+	}
+}
+
 func TestLaunchNeedsTwo(t *testing.T) {
 	r, _, _ := newRoom(t)
 	if err := r.Launch("u1"); err != ErrNotEnough {

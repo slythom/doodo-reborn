@@ -80,13 +80,9 @@ func _ready() -> void:
 	UI.load_theme()
 	randomize()
 	splat_tex = _make_splat_texture()
-	_environment()
-	_lights()
-	_room()
-	_table()
-	_camera()
-	_hud()
 	view = Net.view
+	_build_scene()
+	_hud()
 	_build_seats()
 	_refresh()
 	Net.room_state.connect(_on_view)
@@ -116,9 +112,9 @@ func _build_seats() -> void:
 	var n: int = UI.arr(view.get("players")).size()
 	var my_seat: int = view.get("your_seat", -1)
 	var is_spectator := my_seat < 0
-	var skins := [Color(0.95, 0.78, 0.6), Color(0.85, 0.62, 0.42), Color(0.98, 0.85, 0.7), Color(0.7, 0.5, 0.35), Color(0.92, 0.72, 0.55), Color(0.8, 0.6, 0.45)]
-	var shirts := [Color(0.2, 0.5, 0.85), Color(0.85, 0.3, 0.25), Color(0.2, 0.65, 0.3), Color(0.9, 0.75, 0.2), Color(0.55, 0.3, 0.7), Color(0.3, 0.7, 0.75)]
-	var hairs := [Color(0.2, 0.12, 0.06), Color(0.5, 0.32, 0.15), Color(0.1, 0.1, 0.1), Color(0.75, 0.55, 0.2), Color(0.35, 0.2, 0.1), Color(0.6, 0.6, 0.65)]
+	var skins: Array = _scene.get("skins", SALON_SKINS)
+	var shirts: Array = _scene.get("shirts", SALON_SHIRTS)
+	var hairs: Array = _scene.get("hairs", SALON_HAIRS)
 
 	# En spectateur, tous les joueurs sont sur l'arc (triés par siège).
 	var plist: Array = UI.arr(view.get("players")).duplicate()
@@ -980,6 +976,33 @@ func _process(delta: float) -> void:
 	cam.rotation.x += cos(sway_t * 0.45) * 0.00004
 
 # ---- Scène : décor, table, caméra, tomate (identiques au proto) ----
+
+# Palettes Mii du salon (référence — une scène peut fournir les siennes).
+const SALON_SKINS: Array[Color] = [Color(0.95, 0.78, 0.6), Color(0.85, 0.62, 0.42), Color(0.98, 0.85, 0.7), Color(0.7, 0.5, 0.35), Color(0.92, 0.72, 0.55), Color(0.8, 0.6, 0.45)]
+const SALON_SHIRTS: Array[Color] = [Color(0.2, 0.5, 0.85), Color(0.85, 0.3, 0.25), Color(0.2, 0.65, 0.3), Color(0.9, 0.75, 0.2), Color(0.55, 0.3, 0.7), Color(0.3, 0.7, 0.75)]
+const SALON_HAIRS: Array[Color] = [Color(0.2, 0.12, 0.06), Color(0.5, 0.32, 0.15), Color(0.1, 0.1, 0.1), Color(0.75, 0.55, 0.2), Color(0.35, 0.2, 0.1), Color(0.6, 0.6, 0.65)]
+
+var _scene: Dictionary = {} # entrée active du registry de décors
+
+# Registry des décors 3D (specs_artistiques §3). Chaque entrée :
+#   build: Callable                construit décor + table + caméra
+#   skins / shirts / hairs: Array  palettes Mii optionnelles (défaut salon)
+# `salon` est le décor par défaut et le fallback : id inconnu → salon.
+func _scenes() -> Dictionary:
+	return {"salon": {"build": _scene_salon}}
+
+func _build_scene() -> void:
+	var id := String(UI.obj(view.get("options")).get("scene", ""))
+	var reg := _scenes()
+	_scene = reg.get(id, reg["salon"])
+	_scene.build.call()
+
+func _scene_salon() -> void:
+	_environment()
+	_lights()
+	_room()
+	_table()
+	_camera()
 
 func _environment() -> void:
 	var env := Environment.new()

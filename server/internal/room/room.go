@@ -86,6 +86,7 @@ func New(code string, creator *Member, opts protocol.Options, rng *rand.Rand, em
 	if opts.Game.DicePerPlayer == 0 {
 		opts.Game = game.DefaultOptions()
 	}
+	opts.Scene = protocol.NormalizeScene(opts.Scene)
 	if rng == nil {
 		rng = rand.New(rand.NewSource(rand.Int63()))
 	}
@@ -193,6 +194,22 @@ func (r *Room) Kick(byID, targetID string) error {
 	r.kicked[targetID] = true
 	r.emitLocked([]string{targetID}, protocol.Envelope{Type: "notice", Data: protocol.Notice{Kind: "kicked"}})
 	r.removeLocked(m)
+	r.broadcastLocked()
+	return nil
+}
+
+// SetScene choisit le décor 3D de la table — hôte uniquement, en salle
+// d'attente ; figée au lancement (§1.3). Id inconnu → salon (fallback).
+func (r *Room) SetScene(byID, scene string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if byID != r.Host {
+		return ErrNotHost
+	}
+	if r.State != "lobby" {
+		return ErrAlreadyStarted
+	}
+	r.Opts.Scene = protocol.NormalizeScene(scene)
 	r.broadcastLocked()
 	return nil
 }
