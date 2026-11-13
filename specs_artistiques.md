@@ -42,6 +42,7 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 ### Catalogue de scènes
 
 - **`salon` — salon intérieur la nuit (défaut + fallback)** : murs beige chaud, sol bois, grande fenêtre à ciel nocturne derrière les adversaires (détail : gratte-ciels lumineux envisageables), plantes, cadres, appliques murales. Table : feutrine verte + rebord bois, **piètement en fonte sombre métallique** (distinct du bois des gobelets). Éclairage chaud au-dessus de la table, appoints d'ambiance, lumière froide discrète côté fenêtre.
+- **`cimetiere` — cimetière gothique la nuit, personnages squelettes** : toile de fond illustrée (`assets/graveyard_bg.png` — grille, crypte, arbres morts) rendue non éclairée, sol herbeux sombre, pierres tombales et troncs en volume pour la parallaxe, brume légère. Lune froide directionnelle + appoint chaud au-dessus de la table. Personnages : squelettes KayKit (CC0) — 4 variantes (Minion, Mage, Rogue, Warrior) choisies par hash du pseudo, normalisées à ~1,4 unité de haut ; animations du rig partagé (`Idle_A/B`, `Hit_A/B`, `Death_A/B`, `Spawn`, `Throw`…). Le Mage est légèrement incliné « tête levée » pour dégager le visage sous le chapeau. Le splat de tomate est parenté au bone `head` (suit le recul de `Hit_A`).
 - *Scènes futures : à définir — chacune documentée ici en respectant le contrat ci-dessus.*
 
 ## 4. Animations & interactions

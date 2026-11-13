@@ -135,6 +135,12 @@ func TestSetScene(t *testing.T) {
 	if err := r.SetScene("u2", "plage"); err != ErrNotHost {
 		t.Errorf("non-hôte change la scène: err=%v", err)
 	}
+	if err := r.SetScene("u1", "cimetiere"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Opts.Scene; got != "cimetiere" {
+		t.Errorf("scene=%q, want cimetiere", got)
+	}
 	if err := r.SetScene("u1", "plage"); err != nil {
 		t.Fatal(err)
 	}

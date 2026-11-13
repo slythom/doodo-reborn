@@ -990,7 +990,7 @@ var _scene: Dictionary = {} # entrée active du registry de décors
 func _scenes() -> Dictionary:
 	return {
 		"salon": {"build": _scene_salon},
-		"salon_squelettes": {"build": _scene_salon, "char": _char_skeleton},
+		"cimetiere": {"build": _scene_graveyard, "char": _char_skeleton},
 	}
 
 # Mii aux palettes salon — référence ; une scène peut varier via `char`.
@@ -1011,6 +1011,88 @@ func _scene_salon() -> void:
 	_environment()
 	_lights()
 	_room()
+	_table()
+	_camera()
+
+# Cimetière nuit : même table/gobelets/caméra que le salon, mais le décor est
+# une toile de fond illustrée (assets/graveyard_bg.png) + sol sombre +
+# quelques pierres tombales pour la parallaxe.
+func _scene_graveyard() -> void:
+	var env := Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.03, 0.05, 0.09)
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.3, 0.38, 0.52)
+	env.ambient_light_energy = 0.7
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.08, 0.12, 0.18)
+	env.fog_density = 0.04
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+
+	# Lune froide + appoint chaud au-dessus de la table pour la lisibilité.
+	var moon := DirectionalLight3D.new()
+	moon.rotation_degrees = Vector3(-50, -25, 0)
+	moon.light_color = Color(0.6, 0.7, 0.95)
+	moon.light_energy = 0.8
+	moon.shadow_enabled = true
+	add_child(moon)
+
+	var key := OmniLight3D.new()
+	key.position = Vector3(0, 2.5, 0.3)
+	key.light_color = Color(1.0, 0.82, 0.6)
+	key.light_energy = 1.1
+	key.omni_range = 6.0
+	key.shadow_enabled = true
+	add_child(key)
+
+	# Sol herbeux sombre.
+	var ground := PlaneMesh.new()
+	ground.size = Vector2(40, 40)
+	add_child(_mesh(ground, Color(0.07, 0.11, 0.08), Vector3(0, -0.01, -4), 1.0))
+
+	# Toile de fond : illustration panoramique, non éclairée, centrée derrière
+	# l'arc de sièges et assez large pour encaisser le léger balancement caméra.
+	var bg := MeshInstance3D.new()
+	var bg_quad := QuadMesh.new()
+	bg_quad.size = Vector2(28, 15.75) # 16:9
+	var bg_mat := StandardMaterial3D.new()
+	bg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bg_mat.albedo_texture = load("res://assets/graveyard_bg.png")
+	bg_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	bg_quad.material = bg_mat
+	bg.mesh = bg_quad
+	bg.position = Vector3(0, 6.5, -9)
+	add_child(bg)
+
+	# Pierres tombales éparses — volumes simples pour casser la planéité
+	# du fond et donner de la profondeur aux squelettes.
+	var stone := Color(0.28, 0.3, 0.34)
+	for t in [
+		[Vector3(-3.4, 0.3, -4.6), Vector3(0.5, 0.6, 0.12), 8.0],
+		[Vector3(3.6, 0.35, -5.0), Vector3(0.55, 0.7, 0.12), -6.0],
+		[Vector3(-2.2, 0.25, -5.8), Vector3(0.42, 0.5, 0.12), -12.0],
+		[Vector3(2.4, 0.28, -6.2), Vector3(0.45, 0.56, 0.12), 10.0],
+		[Vector3(-4.6, 0.32, -3.0), Vector3(0.5, 0.64, 0.12), 18.0],
+		[Vector3(4.7, 0.3, -3.4), Vector3(0.48, 0.6, 0.12), -15.0],
+	]:
+		var grave := BoxMesh.new()
+		grave.size = t[1]
+		var gi := _mesh(grave, stone.darkened(randf() * 0.15), t[0], 0.95)
+		gi.rotation_degrees.y = t[2]
+		add_child(gi)
+
+	# Deux troncs d'arbres morts pour fermer les côtés.
+	for side in [-1.0, 1.0]:
+		var trunk := CylinderMesh.new()
+		trunk.top_radius = 0.1
+		trunk.bottom_radius = 0.22
+		trunk.height = 4.5
+		var ti := _mesh(trunk, Color(0.1, 0.09, 0.1), Vector3(side * 5.2, 2.25, -6.5), 1.0)
+		ti.rotation_degrees.z = side * 6.0
+		add_child(ti)
+
 	_table()
 	_camera()
 

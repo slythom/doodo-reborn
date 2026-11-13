@@ -56,7 +56,7 @@ func _e2e() -> void:
 	_name_edit.text = "e2e-tester"
 	_connect("create")
 	await get_tree().create_timer(1.5).timeout
-	Net.set_scene("salon_squelettes")
+	Net.set_scene("cimetiere")
 	Net.add_bot()
 	await get_tree().create_timer(1.0).timeout
 	Net.launch()
@@ -236,7 +236,7 @@ func _build_ui() -> void:
 	_scene_opt.add_theme_font_override("font", UI.font_w(700))
 	_scene_opt.add_theme_font_size_override("font_size", 20)
 	_scene_opt.add_theme_color_override("font_color", UI.INK)
-	for s in [["salon", "Salon"], ["salon_squelettes", "Salon — squelettes"]]:
+	for s in [["salon", "Salon"], ["cimetiere", "Cimetière — squelettes"]]:
 		_scene_opt.add_item(s[1])
 		_scene_opt.set_item_metadata(_scene_opt.item_count - 1, s[0])
 	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
