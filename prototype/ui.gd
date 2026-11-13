@@ -109,7 +109,42 @@ static func button(text: String, kind := "btn") -> Button:
 	var dis := sb(Color(n.bg_color, 0.5), n.border_color, 18, n.get_border_width_min(), 3)
 	b.add_theme_stylebox_override("disabled", dis)
 	b.custom_minimum_size = Vector2(0, 56)
+	# Focus visible pour la navigation clavier/manette : même style que hover.
+	var hov: StyleBox = b.get_theme_stylebox("hover")
+	if hov != null:
+		b.add_theme_stylebox_override("focus", hov)
+	_squish(b)
 	return b
+
+# Réaction tactile : le bouton s'écrase à l'appui puis rebondit.
+static func _squish(b: Button) -> void:
+	b.pivot_offset = b.size / 2.0
+	b.resized.connect(func() -> void: b.pivot_offset = b.size / 2.0)
+	b.button_down.connect(func() -> void:
+		var t := b.create_tween()
+		t.tween_property(b, "scale", Vector2(0.94, 0.94), 0.07))
+	b.button_up.connect(func() -> void:
+		var t := b.create_tween()
+		t.tween_property(b, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
+
+# Entrée animée : pop avec rebond (scale + fade), décalable par `delay`.
+static func pop_in(c: Control, delay := 0.0) -> void:
+	c.pivot_offset = c.size / 2.0
+	c.resized.connect(func() -> void: c.pivot_offset = c.size / 2.0, CONNECT_ONE_SHOT)
+	c.scale = Vector2(0.55, 0.55)
+	c.modulate.a = 0.0
+	var t := c.create_tween().set_parallel()
+	t.tween_property(c, "scale", Vector2.ONE, 0.42).set_delay(delay) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t.tween_property(c, "modulate:a", 1.0, 0.22).set_delay(delay)
+
+# Punch bref : grossit puis revient (feedback de changement de valeur).
+static func punch(c: Control, power := 0.18) -> void:
+	c.pivot_offset = c.size / 2.0
+	c.resized.connect(func() -> void: c.pivot_offset = c.size / 2.0, CONNECT_ONE_SHOT)
+	var t := c.create_tween()
+	t.tween_property(c, "scale", Vector2.ONE * (1.0 + power), 0.08)
+	t.tween_property(c, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 # Pill de label (badges, chips joueur, toasts).
 static func pill(text: String, bg: Color, fg: Color, size := 20, wght := 800) -> Label:
@@ -254,6 +289,18 @@ class DieIcon:
 		sbx.shadow_size = 1
 		sbx.shadow_offset = Vector2(0, 3)
 		sbx.draw(get_canvas_item(), r)
+		# Volume « plastique » : reflet frais en haut, ombre douce en bas.
+		var face_r := int(size_px * 0.22)
+		var sheen := StyleBoxFlat.new()
+		sheen.bg_color = Color(1, 1, 1, 0.30) if glow else Color(0.84, 0.92, 0.97, 0.5)
+		sheen.corner_radius_top_left = face_r
+		sheen.corner_radius_top_right = face_r
+		sheen.draw(get_canvas_item(), Rect2(1.5, 1.5, size_px - 3, size_px * 0.32))
+		var shade := StyleBoxFlat.new()
+		shade.bg_color = Color(0.02, 0.08, 0.05, 0.14) if glow else Color(0.15, 0.25, 0.45, 0.08)
+		shade.corner_radius_bottom_left = face_r
+		shade.corner_radius_bottom_right = face_r
+		shade.draw(get_canvas_item(), Rect2(1.5, size_px * 0.60, size_px - 3, size_px * 0.40 - 1.5))
 		var pip_r := size_px * 0.085
 		var q := size_px / 4.0
 		var pos := {

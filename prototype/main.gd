@@ -21,6 +21,7 @@ var splat_by_mii := {}   # mii -> splat node
 # HUD (charte Wii — ui.gd)
 var title_lbl: Label
 var turn_lbl: Label          # pill orange « À TOI DE JOUER ! »
+var bid_pill: PanelContainer # pill blanche de l'enchère en cours
 var bid_row: HBoxContainer   # enchère en cours : quantité × icône + chip enchérisseur
 var palifico_lbl: Label
 var status_lbl: Label        # pill de toast (chat, élimination…)
@@ -50,9 +51,13 @@ var reveal_tween: Tween
 var _wobble_tween: Tween
 var _glow_pulse: Tween
 var reveal_gen := 0           # invalide les timers d'un reveal précédent
-var over_panel: PanelContainer
+var over_root: Control        # overlay de fin de partie « night club »
 var over_box: VBoxContainer
 var rematch_btn: Button
+var _last_bid_sig := ""       # signature de l'enchère (punch à chaque changement)
+var _last_dice: Array = []    # ma main au dernier rafraîchissement
+var _turn_was_mine := false   # détecte le début de mon tour (pop du badge)
+var _turn_hl_seat := -1       # siège mis en valeur (tour en cours)
 
 static func mat(color: Color, roughness := 0.8, emission := false) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -160,25 +165,30 @@ func _build_seats() -> void:
 		# Pseudo + compteur : chip colorée + badge circulaire (comme la maquette),
 		# rendus dans un SubViewport affiché en billboard au-dessus du Mii.
 		var bdg := _seat_badge(p.get("name", "?"), p_seat)
-		bdg.sprite.position = pos + Vector3(0, 1.78, 0)
+		bdg.sprite.position = pos + Vector3(0, 1.86, 0)
 		seat["badge"] = bdg.badge
 		seat["badge_sp"] = bdg.sprite
+		seat["chip"] = bdg.chip
 
 # Chip pseudo + badge compteur affichés en 2D au-dessus du Mii :
 # un SubViewport rend un HBox [chip][badge] texturé sur un Sprite3D billboard.
 func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	var vp := SubViewport.new()
 	vp.transparent_bg = true
-	vp.size = Vector2i(400, 90)
+	vp.size = Vector2i(320, 124)
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	var h := HBoxContainer.new()
-	h.set_anchors_preset(Control.PRESET_FULL_RECT)
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
-	h.add_theme_constant_override("separation", 8)
-	h.add_child(UI.player_chip(p_name, p_seat, 26))
-	var badge := UI.CircleBadge.new("5", UI.PLAYER[p_seat % UI.PLAYER.size()], 44)
-	h.add_child(badge)
-	vp.add_child(h)
+	# Badge compteur AU-DESSUS de la pill pseudo, centré.
+	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.add_theme_constant_override("separation", 6)
+	var badge := UI.CircleBadge.new("5", UI.PLAYER[p_seat % UI.PLAYER.size()], 48)
+	badge.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(badge)
+	var chip := UI.player_chip(p_name, p_seat, 26)
+	chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(chip)
+	vp.add_child(v)
 	add_child(vp)
 
 	var sp := Sprite3D.new()
@@ -187,7 +197,7 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	sp.pixel_size = 0.004
 	sp.shaded = false
 	add_child(sp)
-	return {"sprite": sp, "badge": badge}
+	return {"sprite": sp, "badge": badge, "chip": chip}
 
 func _build_my_hands() -> void:
 	var skin := Color(0.95, 0.78, 0.6)
@@ -227,12 +237,23 @@ func _update_players() -> void:
 			seat["mii"].visible = not eliminated # éliminé : le Mii quitte la table
 
 # Ma main : rangée d'icônes 2D dans le HUD (plus de dés 3D sur la table).
+# Les dés pop en cascade quand la main change (lancer, perte, gain).
 func _update_my_dice() -> void:
+	var me := _player_by_seat(view.get("your_seat", -1))
+	var vals: Array = UI.arr(me.get("dice"))
+	var changed: bool = vals != _last_dice
+	_last_dice = vals
 	for c in my_dice_box.get_children():
 		c.queue_free()
-	var me := _player_by_seat(view.get("your_seat", -1))
-	for v in UI.arr(me.get("dice")):
-		my_dice_box.add_child(UI.DieIcon.new(int(v), 46))
+	for i in vals.size():
+		var di := UI.DieIcon.new(int(vals[i]), 46)
+		di.pivot_offset = Vector2(23, 23)
+		my_dice_box.add_child(di)
+		if changed:
+			di.scale = Vector2.ZERO
+			var t := di.create_tween()
+			t.tween_property(di, "scale", Vector2.ONE, 0.3).set_delay(i * 0.05) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _player_by_seat(seat: int) -> Dictionary:
 	for p in UI.arr(view.get("players")):
@@ -253,6 +274,8 @@ func _update_turn() -> void:
 		turn_lbl.add_theme_color_override("font_color", Color.WHITE)
 		turn_lbl.add_theme_stylebox_override("normal", UI.sb(UI.ORANGE, UI.ORANGE_DK, 20, 0, 3))
 		turn_lbl.visible = true
+		if not _turn_was_mine:
+			UI.punch(turn_lbl, 0.3)
 		_turn_tween = create_tween().set_loops()
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 0.55, 0.45)
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 1.0, 0.45)
@@ -267,13 +290,49 @@ func _update_turn() -> void:
 		turn_lbl.visible = true
 	else:
 		turn_lbl.visible = false
+	_turn_was_mine = mine_turn
+	# Pastille du joueur de tour : anneau blanc lumineux + pulse douce.
+	if turn != _turn_hl_seat:
+		_hl_seat(_turn_hl_seat, false)
+		_turn_hl_seat = turn
+		_hl_seat(turn, true)
+
+# Active/désactive la mise en valeur du pseudo d'un siège (tour en cours).
+func _hl_seat(s: int, on: bool) -> void:
+	if s < 0 or not seats.has(s) or not seats[s].has("chip"):
+		return
+	var seat: Dictionary = seats[s]
+	var chip: Label = seat["chip"]
+	var sp: Sprite3D = seat["badge_sp"]
+	if seat.has("hl_tween") and seat["hl_tween"]:
+		seat["hl_tween"].kill()
+		seat.erase("hl_tween")
+		sp.scale = Vector3.ONE
+	var col := UI.PLAYER[s % UI.PLAYER.size()]
+	if on:
+		var hsb := UI.sb(col, Color.WHITE, 20, 3)
+		hsb.shadow_color = Color(1, 1, 1, 0.45)
+		hsb.shadow_size = 10
+		chip.add_theme_stylebox_override("normal", hsb)
+		var tw := sp.create_tween().set_loops()
+		tw.tween_property(sp, "scale", Vector3.ONE * 1.09, 0.55).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(sp, "scale", Vector3.ONE, 0.55).set_trans(Tween.TRANS_SINE)
+		seat["hl_tween"] = tw
+	else:
+		chip.add_theme_stylebox_override("normal", UI.sb(col, col, 20, 0))
 
 # Enchère en cours : « 5 × ⚄ par <chip> » dans la pill blanche du haut.
+# La pill fait un punch à chaque nouvelle enchère (feedback du changement).
 func _update_bid() -> void:
+	var b := UI.obj(view.get("bid"))
+	var sig := "%s.%d.%d.%d" % [view.get("has_bid", false), int(b.get("quantity", 0)),
+		int(b.get("value", 0)), int(view.get("round", 1))]
+	if sig != _last_bid_sig:
+		_last_bid_sig = sig
+		UI.punch(bid_pill, 0.1)
 	for c in bid_row.get_children():
 		c.queue_free()
 	if view.get("has_bid", false):
-		var b := UI.obj(view.get("bid"))
 		bid_row.add_child(UI.label(str(int(b.get("quantity", 0))), 34, UI.INK, 700, true))
 		bid_row.add_child(UI.label("×", 24, UI.DIM, 800))
 		bid_row.add_child(UI.DieIcon.new(int(b.get("value", 1)), 34))
@@ -319,6 +378,7 @@ func _step_btn(t: String) -> Button:
 func _set_qty(delta: int) -> void:
 	qty_val = clampi(qty_val + delta, 1, 60)
 	qty_lbl.text = str(qty_val)
+	UI.punch(qty_lbl, 0.2)
 	_update_actions()
 
 # Sélecteur de face : la face choisie est cerclée bleu, les autres atténuées.
@@ -372,6 +432,7 @@ func _set_status(t: String) -> void:
 	status_lbl.visible = not t.is_empty()
 	if t.is_empty():
 		return
+	UI.pop_in(status_lbl)
 	get_tree().create_timer(4.0).timeout.connect(func() -> void:
 		if gen == status_gen:
 			status_lbl.visible = false)
@@ -534,25 +595,45 @@ func _show_game_over(e: Dictionary) -> void:
 	_hide_reveal()
 	for c in over_box.get_children():
 		c.queue_free()
-	var t := UI.label("Partie terminée", 34, UI.INK, 700, true)
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	over_box.add_child(t)
 	var ranking := UI.arr(e.get("ranking"))
+	var i_won: bool = not ranking.is_empty() and int(ranking[0]) == int(view.get("your_seat", -2))
+	var tcol := Color("#FFC94D") if i_won else Color("#E9EDF7") # or victoire / blanc-bleu
+	var t := UI.label("VICTOIRE !" if i_won else "PARTIE TERMINÉE", 50, tcol, 700, true)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_color_override("font_outline_color", tcol.darkened(0.5))
+	t.add_theme_constant_override("outline_size", 8)
+	t.add_theme_color_override("font_shadow_color", Color(tcol, 0.4))
+	t.add_theme_constant_override("shadow_offset_y", 5)
+	over_box.add_child(t)
+	UI.pop_in(t)
 	for r in ranking.size():
 		var seat: int = int(ranking[r])
+		var cc := CenterContainer.new()
 		var chip := UI.player_chip("%d. %s" % [r + 1, _player_name(seat)], seat, 22)
-		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		over_box.add_child(chip)
+		cc.add_child(chip)
+		over_box.add_child(cc)
+		UI.pop_in(chip, 0.35 + r * 0.1)
+	var btns := VBoxContainer.new()
+	btns.custom_minimum_size.x = 380
+	btns.add_theme_constant_override("separation", 12)
+	over_box.add_child(btns)
 	rematch_btn = UI.button("Revanche", "primary")
 	rematch_btn.visible = view.get("your_seat", -1) >= 0 # joueurs seulement
 	rematch_btn.pressed.connect(func() -> void: Net.rematch())
-	over_box.add_child(rematch_btn)
+	btns.add_child(rematch_btn)
 	var back_btn := UI.button("Retour au menu", "btn")
 	back_btn.pressed.connect(func() -> void:
 		Net.leave()
 		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
-	over_box.add_child(back_btn)
-	over_panel.visible = true
+	btns.add_child(back_btn)
+	over_root.modulate.a = 0.0
+	over_root.visible = true
+	var fade := create_tween()
+	fade.tween_property(over_root, "modulate:a", 1.0, 0.25)
+	if rematch_btn.visible:
+		rematch_btn.call_deferred("grab_focus")
+	else:
+		back_btn.call_deferred("grab_focus")
 
 # ---- Emotes (tomate) : envoi optimiste + réception ----
 
@@ -602,19 +683,25 @@ func _hud() -> void:
 	top.add_theme_constant_override("separation", 8)
 	layer.add_child(top)
 
-	title_lbl = UI.label("%s — %s" % [view.get("name", "Doodo"), view.get("code", "")], 16, UI.DIM, 800)
+	title_lbl = UI.label("%s — %s" % [view.get("name", "Doodo"), view.get("code", "")], 15, UI.DIM, 800)
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var tsb := UI.sb(Color(1, 1, 1, 0.66), Color(0, 0, 0, 0), 14, 0)
+	tsb.content_margin_top = 4
+	tsb.content_margin_bottom = 4
+	title_lbl.add_theme_stylebox_override("normal", tsb)
 	top.add_child(title_lbl)
 
 	var tc := CenterContainer.new()
 	top.add_child(tc)
 	turn_lbl = UI.label("", 26, Color.WHITE, 700, true)
+	turn_lbl.resized.connect(func() -> void: turn_lbl.pivot_offset = turn_lbl.size / 2.0)
 	turn_lbl.visible = false
 	tc.add_child(turn_lbl)
 
 	var bc := CenterContainer.new()
 	top.add_child(bc)
-	var bid_pill := UI.panel()
+	bid_pill = UI.panel()
+	bid_pill.resized.connect(func() -> void: bid_pill.pivot_offset = bid_pill.size / 2.0)
 	bc.add_child(bid_pill)
 	bid_row = HBoxContainer.new()
 	bid_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -658,8 +745,12 @@ func _hud() -> void:
 	my_dice_box.add_theme_constant_override("separation", 10)
 	mc.add_child(my_dice_box)
 
-	# Panneau d'action en bas : hug content vers le haut (maquette HTML).
+	# Panneau d'action en bas : hug content vers le haut, coins arrondis en
+	# haut seulement — effet « bottom sheet » mobile.
 	action_bar = UI.panel()
+	var asb := action_bar.get_theme_stylebox("panel") as StyleBoxFlat
+	asb.corner_radius_bottom_left = 0
+	asb.corner_radius_bottom_right = 0
 	action_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	action_bar.offset_left = 12
 	action_bar.offset_right = -12
@@ -702,13 +793,18 @@ func _hud() -> void:
 	pickrow.add_child(face_row)
 	for v in 6:
 		var ic := UI.DieIcon.new(v + 1, 34)
+		ic.pivot_offset = Vector2(17, 17)
 		ic.mouse_filter = Control.MOUSE_FILTER_STOP
 		var face := v + 1
 		ic.gui_input.connect(func(ev: InputEvent) -> void:
 			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
 				or (ev is InputEventScreenTouch and ev.pressed)
 			if tap:
-				_set_face(face))
+				_set_face(face)
+				var ft := ic.create_tween()
+				ft.tween_property(ic, "scale", Vector2(1.28, 1.28), 0.07)
+				ft.tween_property(ic, "scale", Vector2.ONE, 0.14) \
+					.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
 		face_icons.append(ic)
 		face_row.add_child(ic)
 
@@ -740,40 +836,12 @@ func _hud() -> void:
 	reveal_panel.visible = false
 	layer.add_child(reveal_panel)
 
-	var rbg_tex := TextureRect.new()
-	rbg_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
-	rbg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	rbg_tex.stretch_mode = TextureRect.STRETCH_SCALE
-	var grad := Gradient.new()
-	grad.set_color(0, Color("#0E1530"))
-	grad.set_color(1, Color("#1E2B52"))
-	var gt := GradientTexture2D.new()
-	gt.gradient = grad
-	gt.width = 32
-	gt.height = 256
-	gt.fill = GradientTexture2D.FILL_LINEAR
-	gt.fill_from = Vector2(0.5, 0.0)
-	gt.fill_to = Vector2(0.5, 1.0)
-	rbg_tex.texture = gt
-	reveal_panel.add_child(rbg_tex)
-
-	for o in [
-		[Vector2(-120, 120), Color("#3FC8EC"), 0.22, 340.0],
-		[Vector2(430, 560), Color("#7BC94E"), 0.18, 400.0],
-		[Vector2(-60, 980), Color("#FFB45F"), 0.15, 330.0],
-	]:
-		var orb := UI.orb(Color(o[1], o[2]), o[3])
-		orb.position = o[0]
-		reveal_panel.add_child(orb)
+	_night_bg(reveal_panel)
 
 	# Halo derrière le titre — teinté rouge ou vert à l'événement.
 	reveal_glow = UI.orb(Color(1, 1, 1, 0.0), 420.0)
 	reveal_glow.position = Vector2(-60, -230)
 	reveal_panel.add_child(reveal_glow)
-
-	var rdots := UI.Dots.new()
-	rdots.col = Color(1, 1, 1, 0.06)
-	reveal_panel.add_child(rdots)
 
 	var rmargin := MarginContainer.new()
 	rmargin.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -870,15 +938,49 @@ func _hud() -> void:
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rv.add_child(hint)
 
-	# Overlay fin de partie (au-dessus de la révélation).
-	over_panel = UI.panel()
-	over_panel.visible = false
-	over_panel.set_anchors_preset(Control.PRESET_CENTER)
-	over_panel.custom_minimum_size.x = 440
-	layer.add_child(over_panel)
+	# Overlay fin de partie : même ambiance « night club » que la révélation.
+	over_root = Control.new()
+	over_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	over_root.visible = false
+	layer.add_child(over_root)
+	_night_bg(over_root)
+	var oc := CenterContainer.new()
+	oc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	over_root.add_child(oc)
 	over_box = VBoxContainer.new()
-	over_box.add_theme_constant_override("separation", 12)
-	over_panel.add_child(over_box)
+	over_box.add_theme_constant_override("separation", 14)
+	oc.add_child(over_box)
+
+# Fond « night club » commun aux overlays plein écran (révélation, fin) :
+# dégradé bleu nuit opaque + orbes lumineux + trame de pois blanche.
+func _night_bg(parent: Control) -> void:
+	var bg_tex := TextureRect.new()
+	bg_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg_tex.stretch_mode = TextureRect.STRETCH_SCALE
+	var grad := Gradient.new()
+	grad.set_color(0, Color("#0E1530"))
+	grad.set_color(1, Color("#1E2B52"))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	gt.width = 32
+	gt.height = 256
+	gt.fill = GradientTexture2D.FILL_LINEAR
+	gt.fill_from = Vector2(0.5, 0.0)
+	gt.fill_to = Vector2(0.5, 1.0)
+	bg_tex.texture = gt
+	parent.add_child(bg_tex)
+	for o in [
+		[Vector2(-120, 120), Color("#3FC8EC"), 0.22, 340.0],
+		[Vector2(430, 560), Color("#7BC94E"), 0.18, 400.0],
+		[Vector2(-60, 980), Color("#FFB45F"), 0.15, 330.0],
+	]:
+		var orb := UI.orb(Color(o[1], o[2]), o[3])
+		orb.position = o[0]
+		parent.add_child(orb)
+	var d := UI.Dots.new()
+	d.col = Color(1, 1, 1, 0.06)
+	parent.add_child(d)
 
 func _process(delta: float) -> void:
 	sway_t += delta
