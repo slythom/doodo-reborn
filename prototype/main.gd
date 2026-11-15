@@ -1496,15 +1496,17 @@ func _make_stink_texture() -> ImageTexture:
 # personnage — durée ~3 s comme le splat, sortie en fondu.
 func _add_stink(mii: Node3D) -> void:
 	var stink := Node3D.new()
+	# Collé au sommet du crâne : le badge pseudo+dés flotte vers y≈1,67 —
+	# plus haut, le miasme empiétait dessus.
 	var ay: float = mii.splat_anchor().y if mii.has_method("splat_anchor") else 1.3
-	stink.position = Vector3(0, ay + 0.45, 0.04)
+	stink.position = Vector3(0, ay + 0.20, 0.04)
 	mii.add_child(stink)
 
 	# Volutes : quad billboard — lisible de la caméra quel que soit le siège,
 	# non éclairé pour rester visible dans la nuit du cimetière.
 	var wisp := MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2(0.32, 0.42)
+	q.size = Vector2(0.28, 0.32)
 	var qm := StandardMaterial3D.new()
 	qm.albedo_texture = stink_tex
 	qm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -1523,9 +1525,10 @@ func _add_stink(mii: Node3D) -> void:
 	wob.tween_property(wisp, "position:y", -0.04, 1.2).set_trans(Tween.TRANS_SINE)
 	wob.parallel().tween_property(wisp, "rotation:z", -0.12, 1.2).set_trans(Tween.TRANS_SINE)
 
-	# Mouches : petites sphères sombres en orbite inclinée — le signe de la
-	# vitesse fixe le sens, rayon et altitude varient d'une mouche à l'autre.
-	for spec in [[0.16, 2.8, -0.02], [0.23, -3.6, 0.07]]:
+	# Mouches : petites sphères sombres en orbite inclinée — rayon > rayon du
+	# crâne (≈0,17) pour ne pas traverser la tête, altitude basse pour rester
+	# sous le badge. Le signe de la vitesse fixe le sens de rotation.
+	for spec in [[0.20, 2.8, -0.03], [0.24, -3.6, 0.05]]:
 		var pivot := Node3D.new()
 		pivot.rotation.x = randf_range(-0.25, 0.25)
 		stink.add_child(pivot)
