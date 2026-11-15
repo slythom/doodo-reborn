@@ -451,14 +451,37 @@ class ItemIcon:
 		draw_line(cx + Vector2(0, -s * 0.06), cx + Vector2(s * 0.03, -s * 0.14),
 			Color("#4E7A2A"), 2.5, true)
 
-	# Caca : spirale de boules brunes décroissantes — silhouette « emoji ».
+	# Caca : tas spiralé façon soft-serve — strates en ellipses décalées avec
+	# lèvre ombrée et reflet haut-gauche, vrille recourbée. Plus réaliste que
+	# l'empilement plat de cercles de la première version.
+	func _ellipse(center: Vector2, r: float, squash: float, col: Color) -> void:
+		draw_set_transform(center, 0.0, Vector2(1.0, squash))
+		draw_circle(Vector2.ZERO, r, col)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 	func _draw_poop() -> void:
 		var s := size_px
 		var c := Color("#7A4E2D")
-		draw_circle(Vector2(s * 0.5, s * 0.70), s * 0.25, c)
-		draw_circle(Vector2(s * 0.5, s * 0.53), s * 0.19, c)
-		draw_circle(Vector2(s * 0.5, s * 0.39), s * 0.13, c)
-		draw_circle(Vector2(s * 0.56, s * 0.29), s * 0.06, c) # vrille décalée
+		var dk := Color("#53381F")
+		var hi := Color("#A3744A")
+		# Ombre au sol.
+		_ellipse(Vector2(s * 0.5, s * 0.82), s * 0.26, 0.30, Color(0, 0, 0, 0.18))
+		# Strates : silhouette foncée (lèvre dessous), corps, reflet.
+		for L in [
+			[0.50, 0.72, 0.27, 0.52],
+			[0.48, 0.59, 0.215, 0.50],
+			[0.51, 0.465, 0.165, 0.48],
+			[0.50, 0.355, 0.115, 0.46],
+		]:
+			var p := Vector2(L[0], L[1]) * s
+			var r: float = L[2] * s
+			_ellipse(p + Vector2(0, r * 0.10), r, L[3], dk)
+			_ellipse(p, r * 0.94, L[3] * 0.82, c)
+			_ellipse(p + Vector2(-r * 0.30, -r * 0.25), r * 0.42, 0.40, hi)
+		# Vrille : boucles décroissantes recourbées à gauche, bout brillant.
+		for tip in [[0.53, 0.27, 0.055, c], [0.50, 0.215, 0.042, c],
+				[0.455, 0.185, 0.030, c], [0.435, 0.175, 0.016, hi]]:
+			draw_circle(Vector2(tip[0], tip[1]) * s, tip[2] * s, tip[3])
 
 	# Œuf pourri : coquille crème (haut plus pointu) + fêlure verdâtre.
 	func _draw_egg() -> void:
