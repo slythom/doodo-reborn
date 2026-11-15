@@ -1562,58 +1562,11 @@ func _item_projectile(kind: String, col: Color) -> Node3D:
 		return e
 	if kind == "poop":
 		var p := Node3D.new()
-		# Bobine réaliste : un tube balayé le long d'une hélice conique —
-		# rayon et section s'affinent vers la vrille recourbée au sommet,
-		# posé sur un socle ellipsoïde (silhouette « pile of poo » 3D).
-		var turns := 2.75
-		var segs := 110
-		var sides := 9
-		var verts := PackedVector3Array()
-		var norms := PackedVector3Array()
-		var tris := PackedInt32Array()
-		var prev := Vector3.ZERO
-		for i in segs + 1:
-			var t := float(i) / segs
-			var a := t * turns * TAU
-			var rr := 0.072 * pow(1.0 - t, 0.9)
-			var cen := Vector3(cos(a) * rr, 0.052 + t * 0.20, sin(a) * rr)
-			# Le dernier quart penche la pointe sur le côté.
-			cen.x += 0.03 * smoothstep(0.75, 1.0, t)
-			# Tube épais : diamètre ≈ la montée par tour → les spires se
-			# touchent et forment un tas plein (pas un « slinky »).
-			var rt := 0.050 * pow(1.0 - t, 0.75) + 0.002
-			var n := Vector3(cos(a), 0.0, sin(a))
-			var tan := (cen - prev).normalized() if i > 0 else Vector3.UP
-			var b := tan.cross(n).normalized()
-			for j in sides:
-				var th := j * TAU / sides
-				var off := (n * cos(th) + b * sin(th)) * rt
-				verts.append(cen + off)
-				norms.append(off.normalized())
-			prev = cen
-		for i in segs:
-			for j in sides:
-				var jn := (j + 1) % sides
-				var a0: int = i * sides + j
-				var b0: int = i * sides + jn
-				tris.append_array([a0, b0, b0 + sides, a0, b0 + sides, a0 + sides])
-		var am := ArrayMesh.new()
-		var arr := []
-		arr.resize(Mesh.ARRAY_MAX)
-		arr[Mesh.ARRAY_VERTEX] = verts
-		arr[Mesh.ARRAY_NORMAL] = norms
-		arr[Mesh.ARRAY_INDEX] = tris
-		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-		var coil := MeshInstance3D.new()
-		coil.mesh = am
-		var pm := mat(col, 0.55)
-		pm.cull_mode = BaseMaterial3D.CULL_DISABLED # tube ouvert aux extrémités
-		coil.material_override = pm
-		p.add_child(coil)
-		var base := SphereMesh.new()
-		base.radius = 0.12
-		base.height = 0.05
-		p.add_child(_mesh(base, col.darkened(0.08), Vector3(0, 0.02, 0), 0.55))
+		for spec in [[0.078, 0.0], [0.058, 0.105], [0.04, 0.185], [0.017, 0.245]]:
+			var sm := SphereMesh.new()
+			sm.radius = spec[0]
+			sm.height = spec[0] * 2.0
+			p.add_child(_mesh(sm, col, Vector3(0, spec[1], 0), 0.55))
 		return p
 	var sm := SphereMesh.new()
 	sm.radius = 0.055
