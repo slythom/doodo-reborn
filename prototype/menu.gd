@@ -15,6 +15,8 @@ var _players_box: VBoxContainer
 var _launch_btn: Button
 var _scene_opt: OptionButton
 var _leave_btn: Button
+var _bot_btn: Button
+var _bots_box: VBoxContainer
 var _pending := ""
 var _pending_code := ""
 static var _e2e_started := false
@@ -249,9 +251,14 @@ func _build_ui() -> void:
 		Net.set_scene(String(_scene_opt.get_item_metadata(i))))
 	scene_row.add_child(_scene_opt)
 
-	var bot_btn := UI.button("Ajouter un bot", "btn")
-	bot_btn.pressed.connect(func() -> void: Net.add_bot())
-	lv.add_child(bot_btn)
+	_bot_btn = UI.button("Ajouter un bot", "btn")
+	_bot_btn.pressed.connect(func() -> void: Net.add_bot())
+	lv.add_child(_bot_btn)
+
+	# Liste des bots ajoutés : sous le bouton qui les crée (ticket #4).
+	_bots_box = VBoxContainer.new()
+	_bots_box.add_theme_constant_override("separation", 8)
+	lv.add_child(_bots_box)
 
 	_launch_btn = UI.button("Lancer la partie", "primary")
 	_launch_btn.pressed.connect(func() -> void: Net.launch())
@@ -320,6 +327,8 @@ func _on_view(v: Dictionary) -> void:
 	_code_lbl.text = v.get("code", "?")
 	for c in _players_box.get_children():
 		c.queue_free()
+	for c in _bots_box.get_children():
+		c.queue_free()
 	var idx := 0
 	for p in UI.arr(v.get("players")):
 		var txt: String = p.get("name", "?")
@@ -328,13 +337,16 @@ func _on_view(v: Dictionary) -> void:
 		if not p.get("connected", true):
 			txt += "  (déco)"
 		var cc := CenterContainer.new()
-		var chip := UI.player_chip(txt, int(p.get("seat", _players_box.get_child_count())), 20)
+		var chip := UI.player_chip(txt, int(p.get("seat", idx)), 20)
 		cc.add_child(chip)
-		_players_box.add_child(cc)
+		# Les bots listés sous le bouton « Ajouter un bot », les humains en haut.
+		(_bots_box if p.get("bot", false) else _players_box).add_child(cc)
 		UI.pop_in(chip, idx * 0.08)
 		idx += 1
 	var is_host: bool = v.get("host", "") == Net.token
 	_launch_btn.visible = is_host
+	# Ajout de bot réservé à l'hôte côté serveur (ErrNotHost sinon).
+	_bot_btn.visible = is_host
 	_scene_opt.disabled = not is_host
 	var scene_id := String(UI.obj(v.get("options")).get("scene", "salon"))
 	var opt_popup := _scene_opt.get_popup()
