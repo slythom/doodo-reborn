@@ -200,7 +200,7 @@ func TestKickBan(t *testing.T) {
 func TestEmoteWhitelist(t *testing.T) {
 	r, _, s := newRoom(t)
 	r.Join(&Member{ID: "u2", Name: "bob"})
-	for _, kind := range []string{"tomato", "poop"} {
+	for _, kind := range []string{"tomato", "poop", "egg"} {
 		r.Emote("u1", "1", kind)
 	}
 	r.Emote("u1", "1", "rock")     // hors whitelist : ignoré
@@ -214,7 +214,7 @@ func TestEmoteWhitelist(t *testing.T) {
 			got = append(got, n.Text)
 		}
 	}
-	want := []string{"tomato", "poop"}
+	want := []string{"tomato", "poop", "egg"}
 	if len(got) != len(want) {
 		t.Fatalf("emotes relayées=%v, want %v", got, want)
 	}

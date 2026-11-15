@@ -388,6 +388,8 @@ class ItemIcon:
 		match item:
 			"poop":
 				_draw_poop()
+			"egg":
+				_draw_egg()
 			_:
 				_draw_tomato()
 
@@ -413,6 +415,24 @@ class ItemIcon:
 		draw_circle(Vector2(s * 0.5, s * 0.53), s * 0.19, c)
 		draw_circle(Vector2(s * 0.5, s * 0.39), s * 0.13, c)
 		draw_circle(Vector2(s * 0.56, s * 0.29), s * 0.06, c) # vrille décalée
+
+	# Œuf pourri : coquille crème (haut plus pointu) + fêlure verdâtre.
+	func _draw_egg() -> void:
+		var s := size_px
+		var cx := s * 0.5
+		var shell := PackedVector2Array()
+		for i in 28:
+			var a := i * TAU / 28.0
+			var ry := s * (0.20 if sin(a) < 0 else 0.30) # plus effilé en haut
+			shell.append(Vector2(cx + cos(a) * s * 0.23, s * 0.56 + sin(a) * ry))
+		draw_colored_polygon(shell, Color("#DED9B8"))
+		draw_polyline(shell, Color("#B7B090"), 2.0, true)
+		# Fêlure en zigzag au milieu.
+		var crack := PackedVector2Array()
+		for i in 5:
+			crack.append(Vector2(cx - s * 0.14 + i * s * 0.07,
+				s * 0.56 + (s * 0.05 if i % 2 else -s * 0.03)))
+		draw_polyline(crack, Color("#6D7A3C"), 2.5, true)
 
 # ---- ThemeSwitch : interrupteur clair/sombre (pill + knob animé) ----
 # Icône dessinée : soleil (clair) quand off, croissant de lune quand on.

@@ -13,12 +13,13 @@ const ARC_CENTER := 270.0
 
 # Projectiles lancés en tapant un adversaire (emotes §4.3) : couleur du
 # projectile/particules, du splat, grimace de réaction (faces Mii : 0 normal,
-# 1 joyeux, 2 en colère, 3 surpris), vrille en vol (spin, rad. sur Y) et
-# dégoulinures sous le splat (drips). Ajouter une entrée suffit — le serveur
-# whitelist les mêmes ids (room.go validEmotes).
+# 1 joyeux, 2 en colère, 3 surpris), rotation en vol (spin : vrille Y pour le
+# caca, culbute X pour l'œuf) et dégoulinures sous le splat (drips). Ajouter
+# une entrée suffit — le serveur whitelist les mêmes ids (room.go validEmotes).
 const ITEMS := {
-	"tomato": {"label": "Tomate", "color": Color(0.8, 0.1, 0.05), "splat": Color(0.8, 0.1, 0.05, 0.95), "face": 3, "spin": 0.0, "drips": 1},
-	"poop": {"label": "Caca", "color": Color(0.45, 0.28, 0.13), "splat": Color(0.42, 0.26, 0.11, 0.95), "face": 2, "spin": PI * 3.0, "drips": 2},
+	"tomato": {"label": "Tomate", "color": Color(0.8, 0.1, 0.05), "splat": Color(0.8, 0.1, 0.05, 0.95), "face": 3, "spin": Vector3.ZERO, "drips": 1},
+	"poop": {"label": "Caca", "color": Color(0.45, 0.28, 0.13), "splat": Color(0.42, 0.26, 0.11, 0.95), "face": 2, "spin": Vector3(0, PI * 3.0, 0), "drips": 2},
+	"egg": {"label": "Œuf pourri", "color": Color(0.85, 0.83, 0.62), "splat": Color(0.83, 0.71, 0.16, 0.95), "face": 2, "spin": Vector3(PI * 2.5, 0, 0), "drips": 1},
 }
 
 var view := {}
@@ -1474,8 +1475,16 @@ func _make_splat_texture(col: Color) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 # Projectile procédural : la tomate est une sphère, le caca une spirale de
-# boules décroissantes — silhouette « emoji » reconnaissable à cette taille.
+# boules décroissantes, l'œuf un ellipsoïde — silhouettes « emoji »
+# reconnaissables à cette taille.
 func _item_projectile(kind: String, col: Color) -> Node3D:
+	if kind == "egg":
+		var sm := SphereMesh.new()
+		sm.radius = 0.05
+		sm.height = 0.1
+		var e := _mesh(sm, col, Vector3.ZERO, 0.45)
+		e.scale = Vector3(0.85, 1.15, 0.85) # ellipsoïde œuf
+		return e
 	if kind == "poop":
 		var p := Node3D.new()
 		for spec in [[0.078, 0.0], [0.058, 0.105], [0.04, 0.185], [0.017, 0.245]]:
@@ -1508,9 +1517,11 @@ func _throw_item(mii: Node3D, kind: String, from_seat := -1) -> void:
 	var mid := (p0 + p2) / 2.0 + Vector3(0, 0.8, 0)
 	var twn := create_tween()
 	twn.tween_method(_bezier_move.bind(node, p0, mid, p2), 0.0, 1.0, 0.55).set_ease(Tween.EASE_IN)
-	# Vrille en vol : le caca tournoie sur lui-même (silhouette « emoji »).
-	if float(item.get("spin", 0.0)) != 0.0:
-		twn.parallel().tween_property(node, "rotation:y", item.spin, 0.55)
+	# Rotation en vol : vrille du caca, culbute de l'œuf (spin est un Vector3
+	# d'euler appliqué sur la durée de l'arc).
+	var spin: Vector3 = item.get("spin", Vector3.ZERO)
+	if spin != Vector3.ZERO:
+		twn.parallel().tween_property(node, "rotation", spin, 0.55)
 	twn.tween_callback(_item_impact.bind(mii, kind, node, p2))
 
 func _bezier_move(t: float, node: Node3D, p0: Vector3, mid: Vector3, p2: Vector3) -> void:
