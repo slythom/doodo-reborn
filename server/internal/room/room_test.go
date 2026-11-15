@@ -197,6 +197,34 @@ func TestKickBan(t *testing.T) {
 	}
 }
 
+func TestEmoteWhitelist(t *testing.T) {
+	r, _, s := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	for _, kind := range []string{"tomato", "poop"} {
+		r.Emote("u1", "1", kind)
+	}
+	r.Emote("u1", "1", "rock")     // hors whitelist : ignoré
+	r.Emote("nobody", "1", "poop") // inconnu : ignoré
+	var got []string
+	for _, m := range s.msgs {
+		if m.env.Type != "notice" {
+			continue
+		}
+		if n, ok := m.env.Data.(protocol.Notice); ok && n.Kind == "emote" {
+			got = append(got, n.Text)
+		}
+	}
+	want := []string{"tomato", "poop"}
+	if len(got) != len(want) {
+		t.Fatalf("emotes relayées=%v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("emote[%d]=%q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestHostTransfer(t *testing.T) {
 	r, _, _ := newRoom(t)
 	r.Join(&Member{ID: "u2", Name: "bob"})

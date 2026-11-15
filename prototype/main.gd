@@ -11,9 +11,19 @@ const ARC_LEFT := 215.0      # arc des adversaires : extrémité gauche
 const ARC_RIGHT := 325.0     #                  extrémité droite
 const ARC_CENTER := 270.0
 
+# Projectiles lancés en tapant un adversaire (emotes §4.3) : couleur du
+# projectile/particules, du splat, et grimace de réaction (faces Mii :
+# 0 normal, 1 joyeux, 2 en colère, 3 surpris). Ajouter une entrée suffit —
+# le serveur whitelist les mêmes ids (room.go validEmotes).
+const ITEMS := {
+	"tomato": {"label": "Tomate", "color": Color(0.8, 0.1, 0.05), "splat": Color(0.8, 0.1, 0.05, 0.95), "face": 3},
+	"poop": {"label": "Caca", "color": Color(0.45, 0.28, 0.13), "splat": Color(0.42, 0.26, 0.11, 0.95), "face": 2},
+}
+
 var view := {}
 var seats := {}          # seat_idx -> {mii, cup, badge, badge_sp}
-var splat_tex: ImageTexture
+var splat_texs := {}     # kind -> ImageTexture
+var cur_item := "tomato" # projectile armé (sélecteur HUD)
 var cam: Camera3D
 var sway_t := 0.0
 var splat_by_mii := {}   # mii -> splat node
@@ -34,6 +44,7 @@ var bid_btn: Button
 var dudo_btn: Button
 var calza_btn: Button
 var action_bar: PanelContainer
+var item_icons := {}        # kind -> UI.ItemIcon (sélecteur de projectile)
 var status_gen := 0
 var _turn_tween: Tween
 # Révélation (même layout que la maquette : contenu direct sur scrim, sans panneau)
@@ -79,7 +90,8 @@ func _mesh(mesh: PrimitiveMesh, color: Color, pos: Vector3, roughness := 0.8, em
 func _ready() -> void:
 	UI.load_theme()
 	randomize()
-	splat_tex = _make_splat_texture()
+	for kind in ITEMS:
+		splat_texs[kind] = _make_splat_texture(ITEMS[kind].splat)
 	view = Net.view
 	_build_scene()
 	_hud()
@@ -92,13 +104,20 @@ func _ready() -> void:
 	Net.connection_closed.connect(func() -> void: _set_status("connexion perdue — reconnexion…"))
 	Net.connection_opened.connect(func() -> void: Net.hello()) # re-join après reconnexion
 	if OS.get_cmdline_user_args().has("--e2e"):
-		get_tree().create_timer(3.0).timeout.connect(_e2e_tomato)
+		get_tree().create_timer(3.0).timeout.connect(_e2e_items)
 
-# e2e : lance une tomate sur le premier adversaire pour exercer impact/splat.
-func _e2e_tomato() -> void:
+# e2e : lance chaque item sur le premier adversaire pour exercer impact/splat.
+func _e2e_items() -> void:
+	var delay := 0.0
+	for kind in ITEMS:
+		var k: String = kind
+		get_tree().create_timer(delay).timeout.connect(func() -> void: _e2e_throw(k))
+		delay += 1.2
+
+func _e2e_throw(kind: String) -> void:
 	for seat in seats:
 		if seat != view.get("your_seat") and seats[seat].has("mii"):
-			_throw_tomato(seats[seat]["mii"])
+			_throw_item(seats[seat]["mii"], kind)
 			return
 
 func _on_view(v: Dictionary) -> void:
@@ -383,6 +402,18 @@ func _set_face(v: int) -> void:
 		ic.queue_redraw()
 	_update_actions()
 
+# Arme un projectile : l'anneau suit la sélection, punch sur la chip choisie.
+func _set_item(kind: String) -> void:
+	cur_item = kind
+	for k in item_icons:
+		var ic: UI.ItemIcon = item_icons[k]
+		var now: bool = k == kind
+		if ic.sel != now:
+			ic.sel = now
+			ic.queue_redraw()
+		if now:
+			UI.punch(ic, 0.15)
+
 func _update_actions() -> void:
 	var spectator: bool = view.get("your_seat", -1) < 0
 	action_bar.visible = not spectator and not view.get("over", false)
@@ -627,7 +658,7 @@ func _show_game_over(e: Dictionary) -> void:
 	else:
 		back_btn.call_deferred("grab_focus")
 
-# ---- Emotes (tomate) : envoi optimiste + réception ----
+# ---- Emotes (lancer d'items) : envoi optimiste + réception ----
 
 func _unhandled_input(event: InputEvent) -> void:
 	var pos := Vector2.ZERO
@@ -647,17 +678,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if hit.is_empty() or not hit.collider.has_meta("mii"):
 		return
 	var mii: Node3D = hit.collider.get_meta("mii")
-	Net.emote(mii.get_meta("seat"), "tomato")  # le serveur diffuse aux autres
-	_throw_tomato(mii)                         # anim optimiste locale
+	Net.emote(mii.get_meta("seat"), cur_item)  # le serveur diffuse aux autres
+	_throw_item(mii, cur_item)                 # anim optimiste locale
 
 func _on_notice(d: Dictionary) -> void:
 	match d.get("kind", ""):
 		"emote":
 			# ne pas rejouer notre propre emote (déjà animée en optimiste)
-			if d.get("from", "") != Net.last_name and d.get("text", "") == "tomato":
+			if d.get("from", "") != Net.last_name and ITEMS.has(d.get("text", "")):
 				var seat := int(d.get("target", "-1"))
 				if seats.has(seat) and seats[seat].has("mii"):
-					_throw_tomato(seats[seat]["mii"], int(d.get("from_seat", -1)))
+					_throw_item(seats[seat]["mii"], d.get("text"), int(d.get("from_seat", -1)))
 		"chat":
 			_set_status("%s : %s" % [d.get("from", "?"), d.get("text", "")])
 
@@ -736,6 +767,28 @@ func _hud() -> void:
 	my_dice_box = HBoxContainer.new()
 	my_dice_box.add_theme_constant_override("separation", 10)
 	mc.add_child(my_dice_box)
+
+	# Sélecteur de projectile : chips verticales au bord droit, à hauteur de
+	# pouce. L'item armé porte un anneau bleu ; le tap sur un joueur le lance.
+	var ib := VBoxContainer.new()
+	ib.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	ib.offset_left = -72
+	ib.offset_right = -12
+	ib.grow_vertical = Control.GROW_DIRECTION_BOTH
+	ib.add_theme_constant_override("separation", 10)
+	layer.add_child(ib)
+	for kind in ITEMS:
+		var ic := UI.ItemIcon.new(kind, 54)
+		ic.tooltip_text = ITEMS[kind].label
+		var k: String = kind
+		ic.gui_input.connect(func(ev: InputEvent) -> void:
+			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
+				or (ev is InputEventScreenTouch and ev.pressed)
+			if tap:
+				_set_item(k))
+		item_icons[kind] = ic
+		ib.add_child(ic)
+	_set_item("tomato")
 
 	# Panneau d'action en bas : hug content vers le haut, coins arrondis en
 	# haut seulement — effet « bottom sheet » mobile.
@@ -1411,22 +1464,34 @@ func _ground_tex() -> ImageTexture:
 		Die._fill_circle(img, c, randi_range(3, 9), col)
 	return ImageTexture.create_from_image(img)
 
-func _make_splat_texture() -> ImageTexture:
+func _make_splat_texture(col: Color) -> ImageTexture:
 	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	for i in 9:
 		var c := Vector2i(32 + randi_range(-14, 14), 32 + randi_range(-14, 14))
-		Die._fill_circle(img, c, randi_range(7, 16), Color(0.8, 0.1, 0.05, 0.95))
+		Die._fill_circle(img, c, randi_range(7, 16), col)
 	return ImageTexture.create_from_image(img)
 
-func _throw_tomato(mii: Node3D, from_seat := -1) -> void:
-	var tomato := MeshInstance3D.new()
+# Projectile procédural : la tomate est une sphère, le caca une spirale de
+# boules décroissantes — silhouette « emoji » reconnaissable à cette taille.
+func _item_projectile(kind: String, col: Color) -> Node3D:
+	if kind == "poop":
+		var p := Node3D.new()
+		for spec in [[0.078, 0.0], [0.058, 0.105], [0.04, 0.185], [0.017, 0.245]]:
+			var sm := SphereMesh.new()
+			sm.radius = spec[0]
+			sm.height = spec[0] * 2.0
+			p.add_child(_mesh(sm, col, Vector3(0, spec[1], 0), 0.55))
+		return p
 	var sm := SphereMesh.new()
 	sm.radius = 0.055
 	sm.height = 0.11
-	sm.material = mat(Color(0.8, 0.1, 0.05), 0.5)
-	tomato.mesh = sm
-	add_child(tomato)
+	return _mesh(sm, col, Vector3.ZERO, 0.5)
+
+func _throw_item(mii: Node3D, kind: String, from_seat := -1) -> void:
+	var item: Dictionary = ITEMS[kind]
+	var node := _item_projectile(kind, item.color)
+	add_child(node)
 
 	# Origine : mes mains si c'est moi (ou un spectateur « dans les tribunes »),
 	# sinon la main du lanceur (son Mii, légèrement vers la table).
@@ -1441,14 +1506,16 @@ func _throw_tomato(mii: Node3D, from_seat := -1) -> void:
 		else mii.global_position + Vector3(0, 1.32, 0.05)
 	var mid := (p0 + p2) / 2.0 + Vector3(0, 0.8, 0)
 	var twn := create_tween()
-	twn.tween_method(_bezier_move.bind(tomato, p0, mid, p2), 0.0, 1.0, 0.55).set_ease(Tween.EASE_IN)
-	twn.tween_callback(_tomato_impact.bind(mii, tomato, p2))
+	twn.tween_method(_bezier_move.bind(node, p0, mid, p2), 0.0, 1.0, 0.55).set_ease(Tween.EASE_IN)
+	twn.tween_callback(_item_impact.bind(mii, kind, node, p2))
 
-func _bezier_move(t: float, tomato: MeshInstance3D, p0: Vector3, mid: Vector3, p2: Vector3) -> void:
-	tomato.global_position = p0.lerp(mid, t).lerp(mid.lerp(p2, t), t)
+func _bezier_move(t: float, node: Node3D, p0: Vector3, mid: Vector3, p2: Vector3) -> void:
+	node.global_position = p0.lerp(mid, t).lerp(mid.lerp(p2, t), t)
 
-func _tomato_impact(mii: Node3D, tomato: MeshInstance3D, at: Vector3) -> void:
-	tomato.queue_free()
+func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3) -> void:
+	node.queue_free()
+	var item: Dictionary = ITEMS[kind]
+	var col: Color = item.color
 
 	var ppm := ParticleProcessMaterial.new()
 	ppm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
@@ -1469,7 +1536,7 @@ func _tomato_impact(mii: Node3D, tomato: MeshInstance3D, at: Vector3) -> void:
 	var dm := SphereMesh.new()
 	dm.radius = 0.012
 	dm.height = 0.024
-	dm.material = mat(Color(0.8, 0.1, 0.05), 0.5)
+	dm.material = mat(col, 0.5)
 	gp.draw_pass_1 = dm
 	gp.position = at
 	add_child(gp)
@@ -1480,7 +1547,7 @@ func _tomato_impact(mii: Node3D, tomato: MeshInstance3D, at: Vector3) -> void:
 	var sq := QuadMesh.new()
 	sq.size = Vector2(0.2, 0.2)
 	var sqm := StandardMaterial3D.new()
-	sqm.albedo_texture = splat_tex
+	sqm.albedo_texture = splat_texs[kind]
 	sqm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sq.material = sqm
 	splat.mesh = sq
@@ -1491,6 +1558,6 @@ func _tomato_impact(mii: Node3D, tomato: MeshInstance3D, at: Vector3) -> void:
 		mii.add_child(splat)
 	get_tree().create_timer(3.0).timeout.connect(splat.queue_free)
 
-	mii.set_face(3)
+	mii.set_face(item.face)
 	mii.play_flinch()
 	get_tree().create_timer(3.0).timeout.connect(func() -> void: mii.set_face(mii._face))

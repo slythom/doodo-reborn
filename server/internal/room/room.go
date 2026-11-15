@@ -440,7 +440,7 @@ func (r *Room) Leave(id string) bool {
 }
 
 // validEmotes est la whitelist des interactions visuelles (§4.3).
-var validEmotes = map[string]bool{"tomato": true}
+var validEmotes = map[string]bool{"tomato": true, "poop": true}
 
 // Emote diffuse une interaction visuelle vers le siège cible (§4.3).
 // Le serveur ne fait que valider et relayer — l'anim est côté client.

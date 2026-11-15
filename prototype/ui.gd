@@ -358,6 +358,62 @@ class DieIcon:
 		for p in pos.get(clampi(value, 1, 6), pos[1]):
 			draw_circle(p, pip_r, pip_col)
 
+# ---- ItemIcon : chip de projectile pour le sélecteur d'objets à lancer ----
+# Glyphes dessinés : les fonts embarquées n'ont pas d'emoji et une fallback
+# système serait fragile à l'export — tout est vectoriel, comme DieIcon.
+class ItemIcon:
+	extends Control
+	var item := "tomato"
+	var size_px := 54
+	var sel := false   # anneau bleu (item armé)
+
+	func _init(i := "tomato", s := 54) -> void:
+		item = i
+		size_px = s
+		custom_minimum_size = Vector2(s, s)
+
+	func _draw() -> void:
+		var r := Rect2(Vector2.ZERO, Vector2(size_px, size_px))
+		if sel:
+			draw_rect(r.grow(4), UI.BLUE, false, 3.0, true)
+		var sbx := StyleBoxFlat.new()
+		sbx.bg_color = Color.WHITE
+		sbx.border_color = UI.EDGE
+		sbx.set_border_width_all(1)
+		sbx.set_corner_radius_all(int(size_px * 0.28))
+		sbx.shadow_color = UI.SHADOW
+		sbx.shadow_size = 3
+		sbx.shadow_offset = Vector2(0, 2)
+		sbx.draw(get_canvas_item(), r)
+		match item:
+			"poop":
+				_draw_poop()
+			_:
+				_draw_tomato()
+
+	# Tomate : corps rouge + calice vert en étoile + pédoncule.
+	func _draw_tomato() -> void:
+		var s := size_px
+		draw_circle(Vector2(s * 0.5, s * 0.58), s * 0.27, Color("#E4452F"))
+		var cx := Vector2(s * 0.5, s * 0.40)
+		var star := PackedVector2Array()
+		for i in 10:
+			var a := -PI / 2.0 + i * PI / 5.0
+			var rad := s * (0.14 if i % 2 == 0 else 0.05)
+			star.append(cx + Vector2.from_angle(a) * rad)
+		draw_colored_polygon(star, UI.GREEN_DK)
+		draw_line(cx + Vector2(0, -s * 0.06), cx + Vector2(s * 0.03, -s * 0.14),
+			Color("#4E7A2A"), 2.5, true)
+
+	# Caca : spirale de boules brunes décroissantes — silhouette « emoji ».
+	func _draw_poop() -> void:
+		var s := size_px
+		var c := Color("#7A4E2D")
+		draw_circle(Vector2(s * 0.5, s * 0.70), s * 0.25, c)
+		draw_circle(Vector2(s * 0.5, s * 0.53), s * 0.19, c)
+		draw_circle(Vector2(s * 0.5, s * 0.39), s * 0.13, c)
+		draw_circle(Vector2(s * 0.56, s * 0.29), s * 0.06, c) # vrille décalée
+
 # ---- ThemeSwitch : interrupteur clair/sombre (pill + knob animé) ----
 # Icône dessinée : soleil (clair) quand off, croissant de lune quand on.
 class ThemeSwitch:
