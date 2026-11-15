@@ -33,7 +33,7 @@ func DefaultOptions() Options {
 	return Options{DicePerPlayer: 5, PacoJoker: true, CalzaEnabled: true, PalificoEnabled: true}
 }
 
-func (o Options) validate() error {
+func (o Options) Validate() error {
 	if o.DicePerPlayer < 3 || o.DicePerPlayer > 5 {
 		return fmt.Errorf("game: %d dés de départ hors de [3,5]", o.DicePerPlayer)
 	}
@@ -122,7 +122,7 @@ type Game struct {
 // New crée une partie et lance la première manche. rng pilote les dés et le
 // tirage du premier enchérisseur ; nil -> graine horloge.
 func New(opts Options, ids []string, rng *rand.Rand) (*Game, error) {
-	if err := opts.validate(); err != nil {
+	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
 	if len(ids) < 2 || len(ids) > 6 {

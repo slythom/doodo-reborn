@@ -174,6 +174,103 @@ func TestLaunchNeedsTwo(t *testing.T) {
 	}
 }
 
+func TestSetOptions(t *testing.T) {
+	r, _, s := newRoom(t)
+	if err := r.Join(&Member{ID: "u2", Name: "bob"}); err != nil {
+		t.Fatal(err)
+	}
+	// L'hôte modifie tout : dés, timer, max joueurs, toggles.
+	o := r.Opts
+	o.Game.DicePerPlayer = 4
+	o.Game.PacoJoker = false
+	o.TimerSeconds = 60
+	o.MaxPlayers = 4
+	o.Spectators = false
+	if err := r.SetOptions("u2", &o); err != ErrNotHost {
+		t.Errorf("non-hôte modifie les options: err=%v", err)
+	}
+	if err := r.SetOptions("u1", &o); err != nil {
+		t.Fatal(err)
+	}
+	if r.Opts.Game.DicePerPlayer != 4 || r.Opts.Game.PacoJoker ||
+		r.Opts.TimerSeconds != 60 || r.Opts.MaxPlayers != 4 || r.Opts.Spectators {
+		t.Errorf("options non appliquées: %+v", r.Opts)
+	}
+	// Le snapshot propagé porte les nouvelles options.
+	views := s.viewsFor("u2")
+	if len(views) == 0 || views[len(views)-1].Options.TimerSeconds != 60 {
+		t.Errorf("le snapshot ne propage pas les options")
+	}
+	// Figées au lancement.
+	if err := r.Launch("u1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetOptions("u1", &o); err != ErrAlreadyStarted {
+		t.Errorf("options après lancement: err=%v, want ErrAlreadyStarted", err)
+	}
+}
+
+func TestSetOptionsValidation(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(o *protocol.Options)
+	}{
+		{"nil → rejet", nil},
+		{"dés hors [3,5]", func(o *protocol.Options) { o.Game.DicePerPlayer = 7 }},
+		{"timer hors liste", func(o *protocol.Options) { o.TimerSeconds = 45 }},
+		{"max hors [2,6]", func(o *protocol.Options) { o.MaxPlayers = 9 }},
+		{"mode dieu + public", func(o *protocol.Options) { o.GodMode = true; o.Public = true }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, _, _ := newRoom(t)
+			if tc.mut == nil {
+				if err := r.SetOptions("u1", nil); err != ErrBadOptions {
+					t.Errorf("err=%v, want ErrBadOptions", err)
+				}
+				return
+			}
+			o := r.Opts
+			tc.mut(&o)
+			if err := r.SetOptions("u1", &o); err == nil {
+				t.Errorf("options invalides acceptées: %+v", o)
+			}
+		})
+	}
+	// Max joueurs < joueurs présents → rejet (mais ≥ présents passe).
+	r, _, _ := newRoom(t)
+	for _, id := range []string{"u2", "u3"} {
+		if err := r.Join(&Member{ID: id, Name: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	o := r.Opts
+	o.MaxPlayers = 2 // 3 joueurs présents
+	if err := r.SetOptions("u1", &o); err != ErrTooManyPresent {
+		t.Errorf("max < présents: err=%v, want ErrTooManyPresent", err)
+	}
+	o.MaxPlayers = 3
+	if err := r.SetOptions("u1", &o); err != nil {
+		t.Errorf("max = présents: err=%v", err)
+	}
+}
+
+func TestSetOptionsPreservesScene(t *testing.T) {
+	r, _, _ := newRoom(t)
+	if err := r.SetScene("u1", "cimetiere"); err != nil {
+		t.Fatal(err)
+	}
+	o := r.Opts
+	o.Scene = "" // un client qui ne connaît pas les décors ne doit rien casser
+	o.Game.DicePerPlayer = 4
+	if err := r.SetOptions("u1", &o); err != nil {
+		t.Fatal(err)
+	}
+	if r.Opts.Scene != "cimetiere" {
+		t.Errorf("scene=%q, want cimetiere (préservée)", r.Opts.Scene)
+	}
+}
+
 func TestFullRoom(t *testing.T) {
 	r, _, _ := newRoom(t)
 	r.Opts.MaxPlayers = 2

@@ -17,6 +17,10 @@ var _scene_opt: OptionButton
 var _leave_btn: Button
 var _bot_btn: Button
 var _bots_box: VBoxContainer
+var _opt_dice: OptionButton
+var _opt_maxp: OptionButton
+var _opt_timer: OptionButton
+var _opt_sw := {} # clé d'option booléenne -> UI.ThemeSwitch
 var _pending := ""
 var _pending_code := ""
 static var _e2e_started := false
@@ -36,7 +40,12 @@ func _ready() -> void:
 			"quick": Net.quick_match()
 		_pending = "")
 	Net.room_state.connect(_on_view)
-	Net.net_error.connect(func(c: String, m: String) -> void: _set_status("[%s] %s" % [c, m]))
+	Net.net_error.connect(func(c: String, m: String) -> void:
+		_set_status("[%s] %s" % [c, m])
+		# Refus serveur (ex. set_options) : pas de room_state — on resync
+		# les contrôles sur l'état canonique local pour rétracter le choix.
+		if _lobby.visible:
+			_on_view(Net.view))
 	Net.connection_closed.connect(func() -> void: _set_status("connexion perdue — reconnexion…"))
 	Net.notice_msg.connect(_on_notice)
 	if _name_edit.text == "":
@@ -259,6 +268,33 @@ func _build_ui() -> void:
 		Net.set_scene(String(_scene_opt.get_item_metadata(i))))
 	scene_row.add_child(_scene_opt)
 
+	# Options de la table (§1.3/§4.1) : modifiables par l'hôte jusqu'au
+	# lancement, lecture seule pour les invités. Chaque changement renvoie
+	# l'intégralité des options — le serveur diffuse l'état canonique.
+	var opts_hdr := UI.label("Options de la table", 15, UI.DIM, 800)
+	opts_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lv.add_child(opts_hdr)
+	_opt_dice = _opt_row(lv, "Dés de départ", [["3", 3], ["4", 4], ["5", 5]])
+	_opt_dice.item_selected.connect(func(i: int) -> void:
+		_patch_opt("dice_per_player", int(_opt_dice.get_item_metadata(i))))
+	_opt_maxp = _opt_row(lv, "Joueurs max", [["2", 2], ["3", 3], ["4", 4], ["5", 5], ["6", 6]])
+	_opt_maxp.item_selected.connect(func(i: int) -> void:
+		_patch_opt("max_players", int(_opt_maxp.get_item_metadata(i))))
+	_opt_timer = _opt_row(lv, "Timer", [["15 s", 15], ["30 s", 30], ["60 s", 60], ["Aucun", 0]])
+	_opt_timer.item_selected.connect(func(i: int) -> void:
+		_patch_opt("timer_seconds", int(_opt_timer.get_item_metadata(i))))
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 16)
+	lv.add_child(grid)
+	for t in [["Paco joker", "paco_joker"], ["Calza", "calza_enabled"],
+			["Palifico", "palifico_enabled"], ["Bot si déco", "bot_replacement"],
+			["Spectateurs", "spectators"]]:
+		var key: String = t[1]
+		var tgl := _toggle_cell(grid, t[0])
+		tgl.toggled.connect(func(on: bool) -> void: _patch_opt(key, on))
+		_opt_sw[key] = tgl
+
 	_bot_btn = UI.button("Ajouter un bot", "btn")
 	_bot_btn.pressed.connect(func() -> void: Net.add_bot())
 	lv.add_child(_bot_btn)
@@ -280,6 +316,63 @@ func _build_ui() -> void:
 		_lobby.visible = false
 		_home.visible = true)
 	lv.add_child(_leave_btn)
+
+# Ligne « libellé + liste déroulante » des options de table — valeurs en
+# metadata d'item, comme le sélecteur de décor.
+func _opt_row(parent: Control, label_text: String, items: Array) -> OptionButton:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := UI.label(label_text, 18, UI.INK, 700)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(l)
+	var o := UI.option_button()
+	o.custom_minimum_size.x = 160
+	var pop := o.get_popup()
+	for it in items:
+		o.add_item(it[0])
+		var i := o.item_count - 1
+		o.set_item_metadata(i, it[1])
+		pop.set_item_as_radio_checkable(i, true)
+		pop.set_item_icon_modulate(i, UI.INK)
+	row.add_child(o)
+	return o
+
+# Cellule « libellé + interrupteur » des options booléennes.
+func _toggle_cell(parent: Control, label_text: String) -> UI.ThemeSwitch:
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	var l := UI.label(label_text, 18, UI.INK, 700)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(l)
+	var sw := UI.ThemeSwitch.new(false, false)
+	row.add_child(sw)
+	return sw
+
+# Envoie les options complètes avec un champ modifié — les clés du moteur
+# (§1.3) vivent sous options.game.
+func _patch_opt(key: String, value: Variant) -> void:
+	var o: Dictionary = UI.obj(Net.view.get("options")).duplicate(true)
+	if ["dice_per_player", "paco_joker", "calza_enabled", "palifico_enabled"].has(key):
+		var g: Dictionary = UI.obj(o.get("game"))
+		g[key] = value
+		o["game"] = g
+	else:
+		o[key] = value
+	Net.set_options(o)
+
+# Aligne une liste sur la valeur serveur sans émettre de signal.
+func _sync_opt(o: OptionButton, meta_val: Variant) -> void:
+	var pop := o.get_popup()
+	for i in o.item_count:
+		var cur: bool = o.get_item_metadata(i) == meta_val
+		pop.set_item_checked(i, cur)
+		if cur:
+			o.select(i)
 
 # Champ de saisie Wii : blanc, bord clair, focus bleu + halo.
 func _line_edit(placeholder: String, maxlen: int) -> LineEdit:
@@ -363,6 +456,24 @@ func _on_view(v: Dictionary) -> void:
 		opt_popup.set_item_checked(i, cur)
 		if cur:
 			_scene_opt.select(i)
+	# Options de la table : sync depuis l'état serveur (canonique) —
+	# éditable par l'hôte, lecture seule pour les invités.
+	var opts := UI.obj(v.get("options"))
+	var gopts := UI.obj(opts.get("game"))
+	for o in [_opt_dice, _opt_maxp, _opt_timer]:
+		o.disabled = not is_host
+	_sync_opt(_opt_dice, int(gopts.get("dice_per_player", 5)))
+	_sync_opt(_opt_maxp, int(opts.get("max_players", 6)))
+	_sync_opt(_opt_timer, int(opts.get("timer_seconds", 30)))
+	var groups := {"paco_joker": gopts, "calza_enabled": gopts,
+		"palifico_enabled": gopts, "bot_replacement": opts, "spectators": opts}
+	for k in _opt_sw:
+		var sw: UI.ThemeSwitch = _opt_sw[k]
+		sw.set_on_quiet(bool(groups[k].get(k, true)))
+		sw.editable = is_host
+		sw.focus_mode = Control.FOCUS_ALL if is_host else Control.FOCUS_NONE
+		sw.mouse_filter = Control.MOUSE_FILTER_STOP if is_host else Control.MOUSE_FILTER_IGNORE
+		sw.modulate.a = 1.0 if is_host else 0.55
 	# Focus à l'ouverture du lobby seulement : le refaire à chaque room_state
 	# volerait le focus pendant la navigation manette.
 	if entering:

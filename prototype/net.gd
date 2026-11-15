@@ -104,6 +104,7 @@ func join_room(code: String) -> void: _send({"type": "join", "code": code.to_upp
 func quick_match() -> void: _send({"type": "quick"})
 func launch() -> void: _send({"type": "launch"})
 func set_scene(id: String) -> void: _send({"type": "set_scene", "scene": id})
+func set_options(opts: Dictionary) -> void: _send({"type": "set_options", "options": opts})
 func add_bot() -> void: _send({"type": "add_bot"})
 func leave() -> void: _send({"type": "leave"})
 func chat(text: String) -> void: _send({"type": "chat", "text": text})

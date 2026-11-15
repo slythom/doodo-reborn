@@ -170,6 +170,51 @@ func TestJoinByCode(t *testing.T) {
 	}
 }
 
+func TestSetOptionsEndToEnd(t *testing.T) {
+	h := New()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+	wsURL := "ws" + srv.URL[4:] + "/ws"
+
+	alice := dial(t, wsURL)
+	defer alice.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, alice, "alice")
+	alice.send(t, map[string]any{"type": "create"})
+	view := decodeView(t, alice.recv(t, "room_state", 3*time.Second))
+
+	bob := dial(t, wsURL)
+	defer bob.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, bob, "bob")
+	bob.send(t, map[string]any{"type": "join", "code": view.Code})
+	bob.recv(t, "room_state", 3*time.Second)
+	alice.recv(t, "room_state", 3*time.Second) // arrivée de bob vue par alice
+
+	opts := map[string]any{
+		"game": map[string]any{
+			"dice_per_player": 3, "paco_joker": true,
+			"calza_enabled": true, "palifico_enabled": true,
+		},
+		"timer_seconds": 15, "max_players": 4,
+		"bot_replacement": true, "spectators": true,
+	}
+	// Non-hôte : rejeté en erreur.
+	bob.send(t, map[string]any{"type": "set_options", "options": opts})
+	bob.recv(t, "error", 3*time.Second)
+
+	// Hôte : accepté, le nouvel état est rediffusé.
+	alice.send(t, map[string]any{"type": "set_options", "options": opts})
+	env := alice.recv(t, "room_state", 3*time.Second)
+	v2 := decodeView(t, env)
+	if v2.Options.TimerSeconds != 15 || v2.Options.MaxPlayers != 4 ||
+		v2.Options.Game.DicePerPlayer != 3 {
+		t.Fatalf("options non propagées: %+v", v2.Options)
+	}
+	// Le décor n'est pas écrasé par un payload sans scene.
+	if v2.Options.Scene != "salon" {
+		t.Fatalf("scène écrasée: %q", v2.Options.Scene)
+	}
+}
+
 func decodeView(t *testing.T, env protocol.Envelope) *protocol.View {
 	t.Helper()
 	raw, _ := json.Marshal(env.Data)

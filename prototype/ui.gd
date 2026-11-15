@@ -501,19 +501,24 @@ class ItemIcon:
 				s * 0.56 + (s * 0.05 if i % 2 else -s * 0.03)))
 		draw_polyline(crack, Color("#6D7A3C"), 2.5, true)
 
-# ---- ThemeSwitch : interrupteur clair/sombre (pill + knob animé) ----
-# Icône dessinée : soleil (clair) quand off, croissant de lune quand on.
+# ---- ThemeSwitch : interrupteur (pill + knob animé) ----
+# icons=true : icône soleil/lune dessinée (usage clair/sombre) ;
+# icons=false : interrupteur générique (options de table).
+# editable=false : affichage lecture seule, l'input est ignoré.
 class ThemeSwitch:
 	extends Control
 	signal toggled(on: bool)
 
 	var on := false
-	var _kx := 0.0 # position du knob : 0 = gauche (clair), 1 = droite (sombre)
+	var icons := true
+	var editable := true
+	var _kx := 0.0 # position du knob : 0 = gauche (off), 1 = droite (on)
 	const W := 88.0
 	const H := 42.0
 
-	func _init(initial := false) -> void:
+	func _init(initial := false, with_icons := true) -> void:
 		on = initial
+		icons = with_icons
 		_kx = 1.0 if on else 0.0
 		custom_minimum_size = Vector2(W, H)
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -528,11 +533,22 @@ class ThemeSwitch:
 		t.tween_method(_set_knob, _kx, 1.0 if on else 0.0, 0.22) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
+	# Synchronisation depuis l'état serveur : repositionne sans émettre
+	# `toggled` (sinon chaque room_state renverrait un set_options).
+	func set_on_quiet(v: bool) -> void:
+		if on == v:
+			return
+		on = v
+		_kx = 1.0 if on else 0.0
+		queue_redraw()
+
 	func _set_knob(x: float) -> void:
 		_kx = x
 		queue_redraw()
 
 	func _gui_input(ev: InputEvent) -> void:
+		if not editable:
+			return
 		var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
 			or (ev is InputEventScreenTouch and ev.pressed) \
 			or ev.is_action_pressed("ui_accept")
@@ -551,12 +567,14 @@ class ThemeSwitch:
 		if has_focus():
 			var fr := UI.sb(Color(0, 0, 0, 0), UI.BLUE, int(H / 2), 3)
 			fr.draw(get_canvas_item(), Rect2(Vector2.ZERO, Vector2(W, H)).grow(3))
-		# Knob blanc glissant, avec icône soleil/lune.
+		# Knob blanc glissant, avec icône optionnelle.
 		var kr := H / 2.0 - 5.0
 		var kc := Vector2(lerpf(kr + 5.0, W - kr - 5.0, _kx), H / 2.0)
 		draw_circle(kc + Vector2(0, 2), kr, Color(0, 0, 0, 0.18))
 		draw_circle(kc, kr, Color.WHITE)
 		draw_arc(kc, kr - 1.0, 0.0, TAU, 40, UI.EDGE_DK, 1.5, true)
+		if not icons:
+			return
 		if on:
 			# Croissant : disque ardoise + disque blanc décalé.
 			draw_circle(kc, kr * 0.5, Color("#4A5B80"))

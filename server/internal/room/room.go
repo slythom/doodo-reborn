@@ -32,6 +32,8 @@ var (
 	ErrNoSuchTarget   = errors.New("room: cible introuvable")
 	ErrPlayersOnly    = errors.New("room: action réservée aux joueurs")
 	ErrCannotKickSelf = errors.New("room: l'hôte ne peut pas s'expulser")
+	ErrBadOptions     = errors.New("room: options manquantes")
+	ErrTooManyPresent = errors.New("room: plus de joueurs présents que le maximum demandé")
 )
 
 const (
@@ -210,6 +212,34 @@ func (r *Room) SetScene(byID, scene string) error {
 		return ErrAlreadyStarted
 	}
 	r.Opts.Scene = protocol.NormalizeScene(scene)
+	r.broadcastLocked()
+	return nil
+}
+
+// SetOptions remplace les options de la table — hôte uniquement, en salle
+// d'attente ; figées au lancement (§1.3/§4.1). Le décor est ignoré ici : il
+// garde son message dédié (set_scene) pour ne pas être écrasé.
+func (r *Room) SetOptions(byID string, opts *protocol.Options) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if byID != r.Host {
+		return ErrNotHost
+	}
+	if r.State != "lobby" {
+		return ErrAlreadyStarted
+	}
+	if opts == nil {
+		return ErrBadOptions
+	}
+	o := *opts
+	o.Scene = r.Opts.Scene
+	if err := o.Validate(); err != nil {
+		return err
+	}
+	if o.MaxPlayers < len(r.players) {
+		return ErrTooManyPresent
+	}
+	r.Opts = o
 	r.broadcastLocked()
 	return nil
 }

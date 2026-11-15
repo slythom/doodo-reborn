@@ -2,7 +2,12 @@
 // Godot et le serveur (specs_techniques §4). JSON, enveloppe {type, data}.
 package protocol
 
-import "doodo/internal/game"
+import (
+	"errors"
+	"fmt"
+
+	"doodo/internal/game"
+)
 
 // ---- Client -> serveur ----
 
@@ -41,6 +46,27 @@ type Options struct {
 	GodMode        bool         `json:"god_mode"` // salles privées uniquement
 	Public         bool         `json:"public"`
 	Scene          string       `json:"scene"` // décor 3D, choisi en salle d'attente, figé au lancement
+}
+
+// Validate vérifie la cohérence des options de table (specs §1.3) — appelée
+// quand l'hôte les modifie en salle d'attente ; à la création, le hub pose
+// déjà les défauts.
+func (o Options) Validate() error {
+	if err := o.Game.Validate(); err != nil {
+		return err
+	}
+	switch o.TimerSeconds {
+	case 0, 15, 30, 60:
+	default:
+		return fmt.Errorf("protocol: timer %d s hors de {0, 15, 30, 60}", o.TimerSeconds)
+	}
+	if o.MaxPlayers < 2 || o.MaxPlayers > 6 {
+		return fmt.Errorf("protocol: %d joueurs max hors de [2,6]", o.MaxPlayers)
+	}
+	if o.GodMode && o.Public {
+		return errors.New("protocol: mode dieu réservé aux salles privées (§4.5)")
+	}
+	return nil
 }
 
 // DefaultScene est le décor utilisé quand la valeur demandée est absente ou
