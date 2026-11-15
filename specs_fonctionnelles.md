@@ -42,6 +42,8 @@ avec les transitions Pacos (valeur 1) :
 
 La **première enchère d'une manche ne peut pas porter sur les Pacos** — sauf en manche Palifico, où le premier enchérisseur fixe librement la valeur (§1.3).
 
+Les règles d'enchère liées aux Pacos (interdiction en ouverture, transitions `ceil(X/2)` / `2X+1`) sont **structurelles** : elles s'appliquent que l'option « Paco joker » soit active ou non — celle-ci ne modifie que le décompte. Avec joker désactivé, une enchère sur les Pacos reste possible mais ne compte que les vrais 1 (variante « hardcore »).
+
 Il n'existe **pas de variante officielle** de la règle de surenchère ; les variantes éventuelles relèvent des règles personnalisées (§1.5).
 
 ### 1.3 Options configurables par table

@@ -91,7 +91,21 @@ func _on_packet(txt: String) -> void:
 
 func _send(d: Dictionary) -> void:
 	if is_open():
-		ws.send_text(JSON.stringify(d))
+		ws.send_text(JSON.stringify(_intify(d)))
+
+# Les nombres lus depuis JSON sont des float en GDScript ; le serveur exige
+# des int — toute valeur float entière est reconvertie à l'envoi (ex. le
+# dict options réémis tel quel par set_options).
+static func _intify(v: Variant) -> Variant:
+	if v is Dictionary:
+		for k in v:
+			v[k] = _intify(v[k])
+	elif v is Array:
+		for i in v.size():
+			v[i] = _intify(v[i])
+	elif v is float and v == floor(v):
+		return int(v)
+	return v
 
 # ---- Commandes (miroir du protocole serveur) ----
 

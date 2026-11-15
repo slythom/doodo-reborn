@@ -240,6 +240,7 @@ func (r *Room) SetOptions(byID string, opts *protocol.Options) error {
 		return ErrTooManyPresent
 	}
 	r.Opts = o
+	slog.Info("options modifiées", "room", r.Code, "opts", o)
 	r.broadcastLocked()
 	return nil
 }

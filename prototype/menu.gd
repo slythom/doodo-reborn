@@ -73,6 +73,10 @@ func _e2e() -> void:
 		if a.begins_with("--e2e-scene="):
 			scene = a.get_slice("=", 1)
 	Net.set_scene(scene)
+	# Exerce aussi le chemin options : timer 15 s posé en salle d'attente.
+	var eo: Dictionary = Net.view.get("options", {}).duplicate(true)
+	eo["timer_seconds"] = 15
+	Net.set_options(eo)
 	Net.add_bot()
 	await get_tree().create_timer(1.0).timeout
 	Net.launch()
