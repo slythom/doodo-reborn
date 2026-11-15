@@ -1562,11 +1562,25 @@ func _item_projectile(kind: String, col: Color) -> Node3D:
 		return e
 	if kind == "poop":
 		var p := Node3D.new()
-		for spec in [[0.078, 0.0], [0.058, 0.105], [0.04, 0.185], [0.017, 0.245]]:
+		# Tas spiralé « soft-serve » : sphères aplaties (scale.y) empilées en
+		# zigzag sur x/z — même silhouette que l'icône 2D, plus réaliste que
+		# l'ancien alignement parfait. La teinte s'éclaircit au sommet.
+		var layers := [
+			[Vector3(0, 0.055, 0), 0.075, 0.75],
+			[Vector3(-0.012, 0.13, 0.0), 0.060, 0.72],
+			[Vector3(0.010, 0.195, 0.008), 0.045, 0.70],
+			[Vector3(-0.005, 0.25, -0.005), 0.032, 0.68],
+			[Vector3(0.014, 0.295, 0.0), 0.020, 0.80],
+			[Vector3(0.032, 0.315, 0.0), 0.012, 0.90], # bout de la vrille
+		]
+		for i in layers.size():
+			var spec: Array = layers[i]
 			var sm := SphereMesh.new()
-			sm.radius = spec[0]
-			sm.height = spec[0] * 2.0
-			p.add_child(_mesh(sm, col, Vector3(0, spec[1], 0), 0.55))
+			sm.radius = spec[1]
+			sm.height = spec[1] * 2.0
+			var m := _mesh(sm, col.lightened(i * 0.04), spec[0], 0.5)
+			m.scale.y = spec[2]
+			p.add_child(m)
 		return p
 	var sm := SphereMesh.new()
 	sm.radius = 0.055
