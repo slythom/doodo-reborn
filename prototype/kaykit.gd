@@ -146,19 +146,25 @@ func set_face(_idx: int) -> void:
 func splat_anchor() -> Vector3:
 	return Vector3(0, TARGET_H * 0.82, _face_z + 0.02)
 
-# Point d'impact (espace monde) : surface du visage mesurée au build, juste
-# au-dessus de la jointure du bone `head`. Le z de la jointure étant ≈ 0
-# (axe du cou), `face_dir * _face_z` suffit à plaquer le splat sur la face.
-func impact_point() -> Vector3:
-	var face_dir := global_transform.basis.z
+# Point d'impact (espace monde) : surface du crâne côté lanceur. La tête
+# est approximée par une sphère de rayon _face_z centrée juste au-dessus
+# de la jointure du bone `head` ; `from` = origine du lancer (monde) —
+# sur les sièges en bout d'arc le décal se plaque sur la joue visible
+# plutôt qu'au nez tourné vers la table.
+func impact_point(from := Vector3.ZERO) -> Vector3:
 	if _skel != null and _head_bone >= 0:
-		var head: Vector3 = (_skel.global_transform * _skel.get_bone_global_pose(_head_bone)).origin
-		return head + face_dir * (_face_z + 0.02) + Vector3.UP * 0.07
+		var center: Vector3 = (_skel.global_transform * _skel.get_bone_global_pose(_head_bone)).origin + Vector3.UP * 0.07
+		var n := global_transform.basis.z
+		if from != Vector3.ZERO:
+			n = (from - center).normalized()
+		return center + n * (_face_z + 0.02)
 	return to_global(splat_anchor())
 
 # Parente le splat à l'os de la tête : pendant Hit_A (recul) le visage bouge
 # — un enfant du wrapper resterait en l'air alors que le crâne recule.
-func attach_splat(splat: Node3D) -> void:
+# L'orientation suit la normale radiale au point d'impact : le décal reste
+# « tracké » sur la surface du crâne quel que soit l'angle du siège.
+func attach_splat(splat: Node3D, from := Vector3.ZERO) -> void:
 	if _skel == null or _head_bone < 0:
 		add_child(splat)
 		splat.position = splat_anchor()
@@ -172,13 +178,15 @@ func attach_splat(splat: Node3D) -> void:
 	# ba.global_transform n'est pas encore alimenté par le Skeleton3D → on
 	# calcule la pose du bone nous-mêmes (espace monde).
 	var ba_world: Transform3D = _skel.global_transform * _skel.get_bone_global_pose(_head_bone)
-	# +Z du quad vers l'extérieur (direction du regard, espace os) et
-	# compensation du scale de l'instance — le mesh 0,2 resterait minuscule.
-	# ×1,25 : les crânes chibi sont plus gros qu'un visage Mii, même splat
-	# paraîtrait étriqué.
-	var face_dir := global_transform.basis.z
-	var zloc := (ba_world.basis.inverse() * face_dir).normalized()
+	var center: Vector3 = ba_world.origin + Vector3.UP * 0.07
+	var n := global_transform.basis.z
+	if from != Vector3.ZERO:
+		n = (from - center).normalized()
+	# +Z du quad le long de la normale radiale (vers le lanceur, espace os)
+	# et compensation du scale de l'instance — le mesh 0,2 resterait
+	# minuscule. ×1,25 : les crânes chibi sont plus gros qu'un visage Mii,
+	# même splat paraîtrait étriqué.
+	var zloc := (ba_world.basis.inverse() * n).normalized()
 	splat.basis = Basis.looking_at(-zloc).scaled(Vector3.ONE * (1.25 / _inst.scale.y))
-	# Le décal se colle là où la tomate a visé — pas sur _front : chez le
-	# Mage c'est le bout du chapeau, il flotterait loin devant la tête.
-	splat.position = ba_world.affine_inverse() * impact_point()
+	# Le décal se colle sur la sphère du crâne là où la tomate a visé.
+	splat.position = ba_world.affine_inverse() * (center + n * (_face_z + 0.02))

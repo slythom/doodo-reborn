@@ -46,19 +46,36 @@ func play_flinch() -> void:
 	f.tween_property(self, "scale:y", 1.0, 0.45).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 	f.parallel().tween_property(self, "rotation:x", 0.0, 0.45)
 
+# Tête Mii approximée par une sphère (espace local du wrapper) : le splat se
+# plaque sur la surface côté lanceur au lieu du plan tangent au nez — sinon
+# les sièges en bout d'arc (personnage tourné vers la table) l'affichaient
+# décalé, à moitié hors du crâne.
+const HEAD_C := Vector3(0, 1.31, 0.0)
+const HEAD_R := 0.165
+
 # Point d'accroche du splat de tomate (espace local du wrapper).
 func splat_anchor() -> Vector3:
 	return Vector3(0, 1.32, 0.16)
 
-# Point d'impact de la tomate (espace monde) — hauteur de visage Mii.
-func impact_point() -> Vector3:
-	return to_global(splat_anchor())
+# Point d'impact de la tomate (espace monde) : surface de la tête côté
+# lanceur (`from` = origine du lancer), face frontale par défaut.
+func impact_point(from := Vector3.ZERO) -> Vector3:
+	if from == Vector3.ZERO:
+		return to_global(splat_anchor())
+	var c := to_global(HEAD_C)
+	return c + (from - c).normalized() * HEAD_R
 
 # Parente le splat au wrapper — le recul du Mii anime le wrapper entier,
-# le décal reste donc collé au visage sans os à suivre.
-func attach_splat(splat: Node3D) -> void:
+# le décal reste donc collé au visage sans os à suivre. Orienté selon la
+# normale radiale au point d'impact (le +Z du quad pointe vers le lanceur).
+func attach_splat(splat: Node3D, from := Vector3.ZERO) -> void:
 	add_child(splat)
-	splat.position = splat_anchor()
+	if from == Vector3.ZERO:
+		splat.position = splat_anchor()
+		return
+	var nl := (global_transform.basis.inverse() * (from - to_global(HEAD_C))).normalized()
+	splat.position = HEAD_C + nl * HEAD_R
+	splat.basis = Basis.looking_at(-nl)
 
 static func build(skin: Color, shirt: Color, hair: Color, glasses := false, hair_style := 0, face := 0) -> Mii:
 	var root := Mii.new()

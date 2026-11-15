@@ -1512,7 +1512,7 @@ func _throw_item(mii: Node3D, kind: String, from_seat := -1) -> void:
 		var inward := -fm.global_position
 		inward.y = 0
 		p0 = fm.global_position + Vector3(0, 1.25, 0) + inward.normalized() * 0.3
-	var p2: Vector3 = mii.impact_point() if mii.has_method("impact_point") \
+	var p2: Vector3 = mii.impact_point(p0) if mii.has_method("impact_point") \
 		else mii.global_position + Vector3(0, 1.32, 0.05)
 	var mid := (p0 + p2) / 2.0 + Vector3(0, 0.8, 0)
 	var twn := create_tween()
@@ -1522,12 +1522,12 @@ func _throw_item(mii: Node3D, kind: String, from_seat := -1) -> void:
 	var spin: Vector3 = item.get("spin", Vector3.ZERO)
 	if spin != Vector3.ZERO:
 		twn.parallel().tween_property(node, "rotation", spin, 0.55)
-	twn.tween_callback(_item_impact.bind(mii, kind, node, p2))
+	twn.tween_callback(_item_impact.bind(mii, kind, node, p2, p0))
 
 func _bezier_move(t: float, node: Node3D, p0: Vector3, mid: Vector3, p2: Vector3) -> void:
 	node.global_position = p0.lerp(mid, t).lerp(mid.lerp(p2, t), t)
 
-func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3) -> void:
+func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3, from := Vector3.ZERO) -> void:
 	node.queue_free()
 	var item: Dictionary = ITEMS[kind]
 	var col: Color = item.color
@@ -1567,7 +1567,7 @@ func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3) -> void:
 	sq.material = sqm
 	splat.mesh = sq
 	if mii.has_method("attach_splat"):
-		mii.attach_splat(splat)
+		mii.attach_splat(splat, from)
 	else:
 		splat.position = Vector3(0, 1.32, 0.16)
 		mii.add_child(splat)
