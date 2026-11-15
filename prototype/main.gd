@@ -1576,7 +1576,7 @@ func _item_projectile(kind: String, col: Color) -> Node3D:
 			var t := float(i) / segs
 			var a := t * turns * TAU
 			var rr := 0.072 * pow(1.0 - t, 0.9)
-			var cen := Vector3(cos(a) * rr, 0.052 + t * 0.26, sin(a) * rr)
+			var cen := Vector3(cos(a) * rr, 0.052 + t * 0.20, sin(a) * rr)
 			# Le dernier quart penche la pointe sur le côté.
 			cen.x += 0.03 * smoothstep(0.75, 1.0, t)
 			# Tube épais : diamètre ≈ la montée par tour → les spires se
