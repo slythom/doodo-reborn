@@ -1602,4 +1602,6 @@ func _drop_off(splat: Node3D, dx: float, col: Color) -> void:
 	splat.add_child(drop)
 	var t := create_tween()
 	t.tween_property(drop, "position:y", -0.42, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	# Dérive vers l'extérieur : la goutte décolle du visage (crânes ronds).
+	t.parallel().tween_property(drop, "position:z", 0.03, 0.45)
 	t.tween_callback(drop.queue_free)

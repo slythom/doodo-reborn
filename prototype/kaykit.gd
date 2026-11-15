@@ -21,6 +21,7 @@ var _head_bone := -1
 var _idle := "Idle_A"
 var _face := 0 # compat Mii : main.gd relit _face après une tomate
 var _front := 0.2 # surface frontale (+Z) en unités locales, mesurée au build
+var _face_z := 0.2 # front du visage (+Z) mesuré au build — le bone head est à z≈0
 
 static func _library() -> AnimationLibrary:
 	if _lib == null:
@@ -47,6 +48,30 @@ static func _measure(n: Node, t: Transform3D, aabb: AABB) -> AABB:
 		aabb = _measure(c, t, aabb)
 	return aabb
 
+# Front du visage (z max, espace wrapper) : vertices dans la bande visage —
+# autour de la jointure head (cou) et près de l'axe, pour exclure chapeaux,
+# capuchons et armes qui dépassent le nez. Un offset fixe depuis le bone
+# (z≈0) s'enterrerait dans le crâne : le splat se plaque sur cette surface.
+static func _face_front(inst: Node3D, f: float, head_y: float, fallback: float) -> float:
+	var best := fallback
+	var stack: Array = [[inst, Transform3D.IDENTITY]]
+	while not stack.is_empty():
+		var e: Array = stack.pop_back()
+		var n: Node = e[0]
+		var t: Transform3D = e[1]
+		if n is Node3D:
+			t = t * (n as Node3D).transform
+		if n is MeshInstance3D:
+			for s in n.mesh.get_surface_count():
+				var verts: PackedVector3Array = n.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+				for v in verts:
+					var w: Vector3 = (t * v) * f
+					if w.y > head_y - 0.02 and w.y < head_y + 0.22 and absf(w.x) < 0.14:
+						best = maxf(best, w.z)
+		for c in n.get_children():
+			stack.append([c, t])
+	return best
+
 # models : PackedScenes du pack ; variant : index ; seed : hachage pseudo pour
 # varier l'idle ; tilt : inclinaison « tête levée » (chapeau qui masque le
 # visage vu d'en face, ex. Mage squelette).
@@ -62,8 +87,8 @@ static func build(models: Array, variant: int, seed := 0, tilt := 0.0) -> Kaykit
 	# très différents (Minion 2,17 → Rogue 3,29), un scale fixe ne suffit pas.
 	var aabb := _measure(inst, Transform3D.IDENTITY, AABB())
 	var h := aabb.size.y
+	var f := TARGET_H / h if h > 0.01 else 1.0
 	if h > 0.01:
-		var f := TARGET_H / h
 		inst.scale = Vector3.ONE * f
 		root._front = clamp(aabb.end.z * f + 0.05, 0.12, 0.45)
 	inst.rotation.x = tilt
@@ -73,6 +98,9 @@ static func build(models: Array, variant: int, seed := 0, tilt := 0.0) -> Kaykit
 	if not sks.is_empty():
 		root._skel = sks[0] as Skeleton3D
 		root._head_bone = root._skel.find_bone("head")
+		if root._head_bone >= 0:
+			var hy := root._skel.get_bone_global_pose(root._head_bone).origin.y * f
+			root._face_z = _face_front(inst, f, hy, root._front)
 	root._inst = inst
 
 	root.ap = inst.find_child("AnimationPlayer", true, false) as AnimationPlayer
@@ -113,18 +141,19 @@ func play_flinch() -> void:
 func set_face(_idx: int) -> void:
 	pass # pas de variantes de visage — API compatible avec Mii
 
-# Point d'accroche du splat de tomate, en espace local du wrapper — la tête
-# d'un personnage KayKit n'est ni à la hauteur ni à la profondeur d'un Mii.
+# Point d'accroche du splat, en espace local du wrapper — la tête d'un
+# personnage KayKit n'est ni à la hauteur ni à la profondeur d'un Mii.
 func splat_anchor() -> Vector3:
-	return Vector3(0, TARGET_H * 0.82, _front)
+	return Vector3(0, TARGET_H * 0.82, _face_z + 0.02)
 
-# Point d'impact de la tomate (espace monde) : visage = juste devant et au-
-# dessus de la jointure du bone `head`. Fallback sur l'ancre wrapper.
+# Point d'impact (espace monde) : surface du visage mesurée au build, juste
+# au-dessus de la jointure du bone `head`. Le z de la jointure étant ≈ 0
+# (axe du cou), `face_dir * _face_z` suffit à plaquer le splat sur la face.
 func impact_point() -> Vector3:
 	var face_dir := global_transform.basis.z
 	if _skel != null and _head_bone >= 0:
 		var head: Vector3 = (_skel.global_transform * _skel.get_bone_global_pose(_head_bone)).origin
-		return head + face_dir * 0.12 + Vector3.UP * 0.07
+		return head + face_dir * (_face_z + 0.02) + Vector3.UP * 0.07
 	return to_global(splat_anchor())
 
 # Parente le splat à l'os de la tête : pendant Hit_A (recul) le visage bouge
@@ -133,6 +162,7 @@ func attach_splat(splat: Node3D) -> void:
 	if _skel == null or _head_bone < 0:
 		add_child(splat)
 		splat.position = splat_anchor()
+		splat.scale = Vector3.ONE * 1.25
 		return
 	var ba := BoneAttachment3D.new()
 	ba.bone_idx = _head_bone
@@ -144,9 +174,11 @@ func attach_splat(splat: Node3D) -> void:
 	var ba_world: Transform3D = _skel.global_transform * _skel.get_bone_global_pose(_head_bone)
 	# +Z du quad vers l'extérieur (direction du regard, espace os) et
 	# compensation du scale de l'instance — le mesh 0,2 resterait minuscule.
+	# ×1,25 : les crânes chibi sont plus gros qu'un visage Mii, même splat
+	# paraîtrait étriqué.
 	var face_dir := global_transform.basis.z
 	var zloc := (ba_world.basis.inverse() * face_dir).normalized()
-	splat.basis = Basis.looking_at(-zloc).scaled(Vector3.ONE / _inst.scale.y)
+	splat.basis = Basis.looking_at(-zloc).scaled(Vector3.ONE * (1.25 / _inst.scale.y))
 	# Le décal se colle là où la tomate a visé — pas sur _front : chez le
 	# Mage c'est le bout du chapeau, il flotterait loin devant la tête.
 	splat.position = ba_world.affine_inverse() * impact_point()
