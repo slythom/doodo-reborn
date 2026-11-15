@@ -159,6 +159,45 @@ static func button(text: String, kind := "btn") -> Button:
 	_squish(b)
 	return b
 
+# Liste déroulante Wii : enrobage du bouton neutre, encres dans tous les
+# états (sinon survol = texte blanc du thème Godot sur fond blanc) et popup
+# retématisé — c'est une fenêtre à part, il n'hérite de rien du contrôle :
+# sans ça les items restent au style par défaut (petits, sombres).
+static func option_button() -> OptionButton:
+	var o := OptionButton.new()
+	o.custom_minimum_size = Vector2(0, 44)
+	o.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	o.add_theme_font_override("font", font_w(700))
+	o.add_theme_font_size_override("font_size", 20)
+	for c in ["font_color", "font_hover_color", "font_pressed_color",
+			"font_hover_pressed_color", "font_focus_color"]:
+		o.add_theme_color_override(c, INK)
+	o.add_theme_color_override("font_disabled_color", Color(INK, 0.5))
+	o.add_theme_stylebox_override("normal", sb(PANEL, EDGE, 14, 2))
+	o.add_theme_stylebox_override("disabled", sb(PANEL, EDGE, 14, 2))
+	for s in ["hover", "pressed", "focus"]:
+		o.add_theme_stylebox_override(s, sb(PANEL, BLUE, 14, 2))
+	# Flèche du thème par défaut : pensée pour fond sombre → teinte encre.
+	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color",
+			"icon_hover_pressed_color", "icon_focus_color"]:
+		o.add_theme_color_override(c, INK)
+	o.add_theme_color_override("icon_disabled_color", Color(INK, 0.5))
+	# Items du menu déroulant : plus gros que le bouton, survol bleu clair.
+	var p := o.get_popup()
+	p.add_theme_font_override("font", font_w(700))
+	p.add_theme_font_size_override("font_size", 26)
+	p.add_theme_color_override("font_color", INK)
+	p.add_theme_color_override("font_hover_color", INK)
+	p.add_theme_color_override("font_disabled_color", DIM)
+	var ps := sb(PANEL, EDGE, 14, 1)
+	ps.shadow_color = SHADOW
+	ps.shadow_size = 10
+	ps.shadow_offset = Vector2(0, 4)
+	p.add_theme_stylebox_override("panel", ps)
+	p.add_theme_stylebox_override("hover", sb(Color("#D9F1FB"), BLUE, 8, 1))
+	p.add_theme_constant_override("vseparation", 8)
+	return o
+
 # Réaction tactile : le bouton s'écrase à l'appui puis rebondit.
 static func _squish(b: Button) -> void:
 	b.pivot_offset = b.size / 2.0

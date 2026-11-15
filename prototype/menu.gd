@@ -234,17 +234,10 @@ func _build_ui() -> void:
 	var sl := UI.label("Décor", 18, UI.INK, 700)
 	sl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	scene_row.add_child(sl)
-	_scene_opt = OptionButton.new()
-	_scene_opt.custom_minimum_size = Vector2(0, 44)
-	_scene_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scene_opt.add_theme_font_override("font", UI.font_w(700))
-	_scene_opt.add_theme_font_size_override("font_size", 20)
-	_scene_opt.add_theme_color_override("font_color", UI.INK)
+	_scene_opt = UI.option_button()
 	for s in [["salon", "Salon"], ["cimetiere", "Cimetière — squelettes"], ["foret", "Forêt — aventuriers"]]:
 		_scene_opt.add_item(s[1])
 		_scene_opt.set_item_metadata(_scene_opt.item_count - 1, s[0])
-	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
-		_scene_opt.add_theme_stylebox_override(state, UI.sb(UI.PANEL, UI.EDGE if state == "normal" else UI.BLUE, 14, 2))
 	_scene_opt.item_selected.connect(func(i: int) -> void:
 		Net.set_scene(String(_scene_opt.get_item_metadata(i))))
 	scene_row.add_child(_scene_opt)
