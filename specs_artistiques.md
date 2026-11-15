@@ -1,6 +1,6 @@
 # Specs artistiques — Doodo
 
-Document de référence pour les choix graphiques et le pipeline d'assets. Complète `specs_fonctionnelles.md` (règles/UX) et la future spec technique.
+Document de référence pour les choix graphiques et le pipeline d'assets. Complète `specs_fonctionnelles.md` (règles/UX) et `specs_techniques.md` (stack/architecture).
 
 *État : validé par prototype (scène Godot jouable, personnages Blender→glb).*
 
@@ -23,7 +23,7 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
   - **Recoloration** par nom de matériau : `Skin`, `Shirt`, `Hair` (peau, t-shirt, cheveux varient par joueur) ; `Dark`, `Mouth`, `Pants`, `SkinDark` fixes.
   - **Rig minimal** : 3 os `Root` → `Body` → `Head`, liaisons rigides par partie (chaque mesh 100 % à un os).
   - **Animations embarquées** dans le `.glb` : `flinch` (sursaut : tête écrasée + recul + rebond). Prévu : rire, hochement de tête « à ton tour », réaction à l'élimination, victoire.
-- Les joueurs sont identifiés par leur **pseudo** affiché (pas d'avatars en v1 — spec fonctionnelle).
+- Les joueurs sont identifiés par leur **pseudo** affiché (pas d'avatars en beta — spec fonctionnelle).
 - Les expressions peuvent changer en cours de partie (ex. face « surpris » à l'impact d'une tomate) par swap de visibilité des nœuds `Face*`.
 
 ## 3. Environnement

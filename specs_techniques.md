@@ -15,7 +15,7 @@ Complète `specs_fonctionnelles.md` (règles/produit) et `specs_artistiques.md` 
 | Backend | **Go** (stdlib + `coder/websocket`) | Un binaire, goroutines par room, idéal temps réel |
 | Transport | **WebSocket over TLS** (`wss://`) | Jeu au tour par tour — pas besoin d'UDP |
 | Hébergement | **VPS Linux** unique | Caddy pour TLS, systemd pour le service |
-| Persistance | **Rien en v1** ; **SQLite** v1.5 (`modernc.org/sqlite`) | V1 sans comptes = pas de BDD nécessaire |
+| Persistance | **Rien en beta** ; **SQLite** v1 (`modernc.org/sqlite`) | Beta sans comptes = pas de BDD nécessaire |
 
 ---
 
@@ -50,7 +50,7 @@ doodo-reborn/
 │       ├── hub/       # connexions WS, routage messages
 │       ├── matchmaking/
 │       ├── bot/       # IA normal (v1)
-│       └── store/     # (v1.5) SQLite, comptes, stats
+│       └── store/     # (v1) SQLite, comptes, stats
 ├── shared/            # contrats messages (schémas JSON) partagés client/serveur
 ├── prototype/         # proto DA actuel (référence, sera absorbé par client/)
 └── specs_*.md
@@ -68,7 +68,7 @@ doodo-reborn/
 - **Règles du protocole** : toute action est validée serveur (tour, légalité d'enchère §1.2) ; le client affiche seulement ce que son rôle autorise.
 - Schémas formalisés dans `shared/` (JSON Schema ou simple doc + types Go/generation côté client plus tard).
 
-*Acté : **REST pour auth/profil (v1.5), WS pour le jeu** — séparation propre.*
+*Acté : **REST pour auth/profil (v1), WS pour le jeu** — séparation propre.*
 
 ---
 
@@ -80,8 +80,8 @@ doodo-reborn/
 - **Timer/auto-enchère** : `time.Timer` par tour dans la room ; expiration → action auto (formule §1.4) injectée dans la même machine à états.
 - **Déconnexion** : joueur marqué `disconnected` (badge diffusé) + deadline 60 s ; pendant ce délai, remplacement bot ou élimination selon l'option de table ; le jeton invité ré-identifie le joueur au retour → reprise du siège si la partie n'est pas finie.
 - **Matchmaking** : file in-memory ; à 60 s → remplissage bots automatique (§3.3).
-- **Persistance v1.5** : `internal/store` + SQLite ; schéma : comptes, jetons invités, stats agrégées. Parties non classées (`ranked_safe:false`, mode dieu) exclues.
-- **Point ouvert — collision de jetons** : aujourd'hui un `hello` avec un jeton déjà associé à une connexion vivante **vole silencieusement la session** (les deux clients reçoivent alors la même vue / se disputent le routage). Inoffensif en prod (jeton 128 bits aléatoire, un device = un jeton) mais à durcir avant v1.5 : au `hello`, si le jeton a une conn vivante → ping de celle-ci ; si elle répond → nouveau jeton pour le nouvel arrivant (identité distincte), sinon → reprise normale (conn zombie). + garder `conns[token] = c` dans `onClose` sous condition (ne pas effacer l'entrée si la conn a été remplacée). *Dev : tester plusieurs instances locales via `DOODO_PROFILE=<id>` (fichier session séparé).*
+- **Persistance v1** : `internal/store` + SQLite ; schéma : comptes, jetons invités, stats agrégées. Parties non classées (`ranked_safe:false`, mode dieu) exclues.
+- **Point ouvert — collision de jetons** : aujourd'hui un `hello` avec un jeton déjà associé à une connexion vivante **vole silencieusement la session** (les deux clients reçoivent alors la même vue / se disputent le routage). Inoffensif en prod (jeton 128 bits aléatoire, un device = un jeton) mais à durcir avant v1 : au `hello`, si le jeton a une conn vivante → ping de celle-ci ; si elle répond → nouveau jeton pour le nouvel arrivant (identité distincte), sinon → reprise normale (conn zombie). + garder `conns[token] = c` dans `onClose` sous condition (ne pas effacer l'entrée si la conn a été remplacée). *Dev : tester plusieurs instances locales via `DOODO_PROFILE=<id>` (fichier session séparé).*
 
 ---
 
@@ -91,7 +91,7 @@ doodo-reborn/
 - **`net/`** : `WsClient` (WebSocketPeer, reconnexion + jeton), `GameState` (dernier snapshot, signaux émis vers l'UI/3D).
 - **`game3d/`** : scène de table state-driven — les positions/visibilité de gobelets, dés, mains se déduisent du snapshot ; les événements (`bid_made`, `reveal`…) déclenchent les animations.
 - **Renderer Mobile**, portrait verrouillé, assets `.glb` générés (cf. specs_artistiques).
-- **Exports** : preset Android (SDK requis) ; iOS via Xcode — **nécessite un Mac** (à provisionner avant v1.5 : machine ou CI macos).
+- **Exports** : preset Android (SDK requis) — la **beta est Android-only** ; iOS via Xcode — **nécessite un Mac** (à provisionner avant v1 : machine ou CI macos, TestFlight/App Store l'exigent).
 - **Absorber le proto** : `prototype/` devient la base de `client/` (Miis, table, interactions déjà validées).
 
 *Acté : révélation Dudo/Calza en **écran 2D dédié** (overlay au-dessus de la scène 3D ; cf. specs_artistiques §7 — charte UI : dés alignés, comptage animé).*
@@ -106,7 +106,7 @@ doodo-reborn/
 
 ## 7. Déploiement & exploitation
 
-- **Un seul binaire Go** (`doodo-server`) servi par **Caddy** (TLS auto, reverse-proxy WS) sur le VPS ; **systemd** pour le service. *Acté : **pas de Docker** en v1 (binaire unique = rien à conteneuriser ; à ajouter seulement si infra gérée ou Postgres en v2).*
+- **Un seul binaire Go** (`doodo-server`) servi par **Caddy** (TLS auto, reverse-proxy WS) sur le VPS ; **systemd** pour le service. *Acté : **pas de Docker** en v1 (binaire unique = rien à conteneuriser ; à ajouter seulement si infra gérée ou Postgres plus tard).*
 - État en mémoire → le serveur tolère le redémarrage (parties perdues = retour lobby côté client ; acceptable en v1, à documenter).
 - Logs structurés (`slog`) ; métriques basiques plus tard si besoin.
 - Pas de scaling horizontal en v1 (un process suffit largement à l'échelle visée).
@@ -128,5 +128,5 @@ doodo-reborn/
 2. `hub` + `room` + WS (partie jouable via client brut/JSON)
 3. `client/` Godot : lobby minimal + Game3D branché sur snapshots (base proto existante)
 4. Matchmaking + bots normal
-5. Polish : spectateurs, reconnexion, SFX, emotes animées
-6. V1.5 : comptes/stats/admin
+5. Polish : spectateurs, reconnexion, SFX, emotes animées → **beta (0.x)**
+6. Lancement public (v1) : comptes/stats/admin, ELO/amis/badges, i18n anglais, export iOS

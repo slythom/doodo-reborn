@@ -2,11 +2,10 @@
 
 **Application mobile iOS/Android** permettant de jouer au **Perudo** (aussi appelé Dudo, Liar's Dice ou « menteur péruvien ») en temps réel, contre d'autres joueurs humains ou des bots.
 
-**V1 :** jeu complet jouable en invité — salles privées/publiques, matchmaking, bots (niveau normal), spectateurs, chat prédéfini, SFX. Pas de comptes ni de stats cumulées.
-**V1.5 :** comptes joueurs, stats persistantes, conversion invité → compte, pouvoirs admin/triche.
-**V2+ :** ELO, historique détaillé, amis, badges.
+**Beta (releases 0.x, Android only)** : jeu complet jouable en invité — salles privées/publiques, matchmaking, bots (niveau normal), spectateurs, chat prédéfini, SFX. Pas de comptes, pas de stats cumulées, aucune persistance.
+**V1 (1.0.0) — lancement public** : = beta + comptes joueurs, stats persistantes, conversion invité → compte, avatars, pouvoirs admin/triche, ELO, historique détaillé, amis, badges, OAuth, anglais, export iOS. **Toutes les features décrites dans ce document sont prévues pour la v1** — il n'y a pas de v2 planifiée.
 
-*Les choix de stack technique et les specs techniques sont traités dans un document séparé, ultérieur.*
+*Les jalons beta/v1 sont du scope produit ; les releases suivent semver (beta → 0.x, v1 → 1.0.0 ; les évolutions post-lancement suivront en 1.x/2.0 selon l'ampleur). Les choix de stack et les specs techniques sont traités dans `specs_techniques.md`.*
 
 ---
 
@@ -63,6 +62,8 @@ Le créateur de la partie choisit avant le lancement. Les options sont **figées
 | Règles personnalisées | toggles individuels (cf. §1.5) | toutes off |
 | Mode dieu | oui / non — **salles privées uniquement** | non — rend la partie non classée |
 
+*Mode dieu et règles personnalisées : jouables dès la beta ; l'effet « non classé » (`ranked_safe`) ne prend sens qu'en v1, quand les stats existent.*
+
 **Manche Palifico** (si activée) : le passage d'un joueur à **exactement 1 dé** « arme » une manche Palifico, jouée à la manche suivante — même si le joueur a regagné des dés entre-temps. Pendant cette manche : les Pacos ne sont **pas** jokers (mais restent enchérissables comme valeur), et la valeur des dés ne peut pas changer (le **premier enchérisseur fixe la valeur**, seule la quantité augmente ensuite). Ne peut survenir qu'**une fois par joueur et par partie** ; si plusieurs joueurs déclenchent en même temps, une seule manche Palifico partagée a lieu ; si le joueur déclencheur est éliminé avant sa manche Palifico, elle n'a pas lieu.
 
 ### 1.4 Cas limites à gérer
@@ -91,26 +92,25 @@ Le créateur de la partie choisit avant le lancement. Les options sont **figées
 
 ## 2. Comptes joueurs
 
-### 2.1 Invité (sans compte) — v1
+### 2.1 Invité (sans compte) — dès la beta
 
 - Un **pseudo** suffit pour jouer (validation : 2-20 caractères, alphanum + quelques symboles).
 - **Unicité des pseudos** : un pseudo invité est refusé (avec suggestion alternative) s'il est déjà pris par un compte enregistré ou par un invité actuellement connecté.
 - Un jeton invité est stocké en local pour permettre la reconnexion.
-- En v1, un invité n'a **aucun cumul de stats** : seul l'écran de fin de partie (§4.4) affiche les statistiques de la partie jouée.
+- En **beta**, un invité n'a **aucun cumul de stats** (aucune persistance) : seul l'écran de fin de partie (§4.4) affiche les statistiques de la partie jouée. À partir de la **v1**, ses parties sont enregistrées côté serveur (indexées sur son jeton) mais restent **invisibles** — elles deviennent les siennes à la conversion en compte (§2.2).
 
-### 2.2 Compte (optionnel) — v1.5
+### 2.2 Compte (optionnel) — v1
 
-- Inscription : pseudo unique + email + mot de passe ; OAuth Google/Discord envisageable (v2).
+- Inscription : pseudo unique + email + mot de passe ; OAuth Google/Discord envisageable en v1.
 - Avec un compte : pseudo réservé, statistiques persistées, avatar.
-- **Conversion invité → compte** : un invité peut convertir son pseudo en compte sans perdre ses stats, car celles-ci sont stockées **serveur, indexées sur le jeton** (invité ou compte). Si son pseudo est déjà réservé par un autre compte, le changement de pseudo est obligatoire, avec avertissement explicite.
+- **Conversion invité → compte** : un invité peut convertir son pseudo en compte sans perdre ses stats, car celles-ci sont stockées **serveur, indexées sur le jeton** (invité ou compte). Si son pseudo est déjà réservé par un autre compte, le changement de pseudo est obligatoire, avec avertissement explicite. (Les testeurs de la beta repartent de zéro : rien n'était persisté.)
 
-### 2.3 Stats de base — v1.5
+### 2.3 Stats & progression — v1
 
 - Parties jouées / gagnées, taux de victoire.
 - Affichées sur le profil du joueur (page `/profil`).
 - Les parties **non classées** (mode dieu, ou règle perso `ranked_safe: false`) sont **exclues purement** des stats — pas de compartiment séparé.
-
-**V2+ :** ELO calculé selon le placement final et le niveau des adversaires, historique détaillé des parties, liste d'amis + invitations directes, badges/succès.
+- **ELO** calculé selon le placement final et le niveau des adversaires, historique détaillé des parties, liste d'amis + invitations directes, badges/succès.
 
 ---
 
@@ -160,7 +160,7 @@ Trois points d'entrée, tous disponibles en v1 :
 - Indicateur du joueur dont c'est le tour (avec compte à rebours si timer).
 - Boutons d'action contextualisés : Surenchérir (sélecteur quantité/valeur), Dudo, Calza.
 - Animation de lancement de dés et de révélation (mobile-first, §7).
-- **Pas d'avatars en v1** : les joueurs sont identifiés par leur pseudo (les avatars arrivent avec les comptes en v1.5).
+- **Pas d'avatars en beta** : les joueurs sont identifiés par leur pseudo (les avatars arrivent avec les comptes en v1).
 
 **Révélation :** après un Dudo/Calza, tous les dés sont montrés brièvement, le comptage des dés correspondants (Pacos inclus si joker) est affiché, le perdant de la manche est animé (perte d'un dé). Le **timer est suspendu pendant toute la phase de résolution** (révélation → perte de dé → début de la manche suivante) et repart à zéro à chaque tour.
 
@@ -175,21 +175,21 @@ Trois points d'entrée, tous disponibles en v1 :
 
 ### 4.4 Fin de partie
 
-- Écran de fin : classement, statistiques marquantes de la partie (nb de Calza réussis, dudos réussis). En v1, c'est le **seul** affichage de stats pour un invité.
+- Écran de fin : classement, statistiques marquantes de la partie (nb de Calza réussis, dudos réussis). En beta, c'est le **seul** affichage de stats ; en v1, les invités n'ont toujours pas de profil (leurs stats ne deviennent visibles qu'après conversion).
 - Boutons : « Revanche » (retour en salle d'attente avec les mêmes options et les joueurs encore présents ; les places libres peuvent être recomblées par des bots ou de nouveaux joueurs), « Retour au lobby », « Partager ».
-- Mise à jour des stats persistées pour les comptes (v1.5).
+- Mise à jour des stats persistées (v1) — comptes et jetons invités.
 
 ### 4.5 God mode
 
 Deux déclinaisons distinctes :
 
-**Pouvoirs admin** — **v1.5 uniquement**, attachés au compte admin, utilisables dans n'importe quelle partie, y compris en spectateur :
+**Pouvoirs admin** — **v1 uniquement**, attachés au compte admin, utilisables dans n'importe quelle partie, y compris en spectateur :
 - Voir le contenu de tous les gobelets en temps réel.
 - Fixer le prochain tirage de dés de n'importe quel joueur (y compris soi-même).
 - Forcer la résolution d'une manche, expulser un joueur, terminer la partie.
 - Panneau d'admin discret en surimpression ; **invisible pour les autres joueurs** ; chaque action admin est journalisée.
 
-**Mode dieu (option de table)** — activable par le créateur d'une **salle privée** uniquement, aucune indication de son activation ou non en jeu, sauf pour le créateur lui-même :
+**Mode dieu (option de table)** — **dès la beta**, activable par le créateur d'une **salle privée** uniquement, aucune indication de son activation ou non en jeu, sauf pour le créateur lui-même :
 - Le créateur de la partie voit les dés de tous les adversaires en temps réel.
 - Le créateur de la partie **choisit** ses dés au lieu de les lancer, à chaque manche.
 - Parties en mode dieu automatiquement **non classées** et exclues des stats ; indisponible via le matchmaking et le lobby public.
@@ -212,7 +212,7 @@ Deux déclinaisons distinctes :
 
 1. **Premier visiteur** : landing → pseudo → choix « Partie rapide » / « Créer une table » / « Voir le lobby » → partie.
 2. **Joueur avec lien** : ouvre le lien → pseudo (ou login) → rejoint directement la salle (ou arrive **en spectateur** si la partie est déjà en cours).
-3. **Joueur compte (v1.5)** : login → accueil avec son profil/stats → rejoint ou crée une table → stats mises à jour en fin de partie.
+3. **Joueur compte (v1)** : login → accueil avec son profil/stats → rejoint ou crée une table → stats mises à jour en fin de partie.
 4. **Spectateur** : lobby → onglet « En cours » → observe une partie.
 
 ---
@@ -224,26 +224,26 @@ Deux déclinaisons distinctes :
 - **Rendu 3D, vue première personne** : le joueur est assis à la table et voit les autres joueurs (identifiés par leur pseudo) autour d'elle, leurs gobelets et le nombre de dés restants ; ses propres dés sont visibles sous son gobelet. Animations : lancer de dés, gobelet soulevé, révélation. Fluide sur smartphone milieu de gamme. HUD 2D (boutons d'action, chat) superposé à la scène.
 - Orientation : **portrait verrouillé** en v1 (paysage réévalué ultérieurement) ; la caméra et le HUD sont pensés pour le portrait (table et adversaires devant/en haut, propres dés et actions en bas).
 - Accessibilité de base : contrastes suffisants, tailles de tap-target ≥ 44 px, indication du tour autre que par la couleur seule.
-- Langue : **français uniquement** en v1 (structure i18n prête pour l'anglais en v2).
+- Langue : **français uniquement en beta** ; l'anglais arrive en v1 (structure i18n prête dès le départ).
 
 ---
 
 ## 8. Hors périmètre (v1)
 
-- **Comptes joueurs, stats persistantes, conversion invité → compte, avatars, pouvoirs admin** → v1.5.
+*Rappel : tout le périmètre décrit dans ce document fait partie de la **v1** — c'est la **beta** qui se limite à la partie « invité » (pas de comptes, stats, avatars, admin, ELO, amis, badges ni anglais).*
+
 - Monétisation, achats intégrés, cosmétiques payants.
 - Tournois, brackets, parties multijoueurs > 6.
 - Chat vocal, webcam, chat texte libre en partie (prédéfini uniquement).
 - Version web navigateur du client (codebase partagée, chantier ultérieur).
 - Notifications push.
 - Mode paysage / tablette.
-- Signalement de joueurs, modération, pénalité pour abandons répétés (un taux d'abandon pourra entrer dans les stats en v2).
+- Signalement de joueurs, modération, pénalité pour abandons répétés (un taux d'abandon pourra néanmoins entrer dans les stats v1).
 - Anti-triche avancé (multi-comptes, collusion) — hors détection serveur basique.
-- Classement ELO, amis, historique détaillé → v2 (spec déjà prévue, cf. §2.3).
 
 ---
 
-## 9. Indicateurs de succès (v1)
+## 9. Indicateurs de succès (beta)
 
 - Une partie complète 4 joueurs jouable de bout en bout sans bug bloquant.
 - Reconnexion fonctionnelle dans les cas courants (délai de grâce de 60 s respecté).
