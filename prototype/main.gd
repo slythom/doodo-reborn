@@ -12,12 +12,13 @@ const ARC_RIGHT := 325.0     #                  extrémité droite
 const ARC_CENTER := 270.0
 
 # Projectiles lancés en tapant un adversaire (emotes §4.3) : couleur du
-# projectile/particules, du splat, et grimace de réaction (faces Mii :
-# 0 normal, 1 joyeux, 2 en colère, 3 surpris). Ajouter une entrée suffit —
-# le serveur whitelist les mêmes ids (room.go validEmotes).
+# projectile/particules, du splat, grimace de réaction (faces Mii : 0 normal,
+# 1 joyeux, 2 en colère, 3 surpris), vrille en vol (spin, rad. sur Y) et
+# dégoulinures sous le splat (drips). Ajouter une entrée suffit — le serveur
+# whitelist les mêmes ids (room.go validEmotes).
 const ITEMS := {
-	"tomato": {"label": "Tomate", "color": Color(0.8, 0.1, 0.05), "splat": Color(0.8, 0.1, 0.05, 0.95), "face": 3},
-	"poop": {"label": "Caca", "color": Color(0.45, 0.28, 0.13), "splat": Color(0.42, 0.26, 0.11, 0.95), "face": 2},
+	"tomato": {"label": "Tomate", "color": Color(0.8, 0.1, 0.05), "splat": Color(0.8, 0.1, 0.05, 0.95), "face": 3, "spin": 0.0, "drips": 1},
+	"poop": {"label": "Caca", "color": Color(0.45, 0.28, 0.13), "splat": Color(0.42, 0.26, 0.11, 0.95), "face": 2, "spin": PI * 3.0, "drips": 2},
 }
 
 var view := {}
@@ -1507,6 +1508,9 @@ func _throw_item(mii: Node3D, kind: String, from_seat := -1) -> void:
 	var mid := (p0 + p2) / 2.0 + Vector3(0, 0.8, 0)
 	var twn := create_tween()
 	twn.tween_method(_bezier_move.bind(node, p0, mid, p2), 0.0, 1.0, 0.55).set_ease(Tween.EASE_IN)
+	# Vrille en vol : le caca tournoie sur lui-même (silhouette « emoji »).
+	if float(item.get("spin", 0.0)) != 0.0:
+		twn.parallel().tween_property(node, "rotation:y", item.spin, 0.55)
 	twn.tween_callback(_item_impact.bind(mii, kind, node, p2))
 
 func _bezier_move(t: float, node: Node3D, p0: Vector3, mid: Vector3, p2: Vector3) -> void:
@@ -1556,8 +1560,46 @@ func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3) -> void:
 	else:
 		splat.position = Vector3(0, 1.32, 0.16)
 		mii.add_child(splat)
+	_add_drips(splat, col, int(item.get("drips", 1)))
 	get_tree().create_timer(3.0).timeout.connect(splat.queue_free)
 
 	mii.set_face(item.face)
 	mii.play_flinch()
 	get_tree().create_timer(3.0).timeout.connect(func() -> void: mii.set_face(mii._face))
+
+# Dégoulinures : fines traînées qui s'allongent depuis le bord bas du splat,
+# puis une goutte se détache et dévale le visage. Enfants du splat : elles
+# héritent de sa base corrigée (bone KayKit) — taille proportionnelle partout.
+func _add_drips(splat: Node3D, col: Color, count: int) -> void:
+	for i in count:
+		var dx := randf_range(-0.05, 0.05)
+		var drip := MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2(0.028, 0.1)
+		var qm := StandardMaterial3D.new()
+		qm.albedo_color = col
+		qm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		q.material = qm
+		drip.mesh = q
+		drip.position = Vector3(dx, -0.1, 0.002)
+		drip.scale.y = 0.05
+		splat.add_child(drip)
+		var t := create_tween()
+		t.tween_interval(0.15 + i * 0.2)
+		# La traînée grandit vers le bas : son bord haut reste collé au splat.
+		t.tween_property(drip, "scale:y", 1.0, 0.6).set_ease(Tween.EASE_OUT)
+		t.parallel().tween_property(drip, "position:y", -0.15, 0.6).set_ease(Tween.EASE_OUT)
+		t.tween_callback(_drop_off.bind(splat, dx, col))
+
+# La goutte détachée tombe avec une accélération façon gravité puis disparaît.
+func _drop_off(splat: Node3D, dx: float, col: Color) -> void:
+	if not is_instance_valid(splat):
+		return
+	var sm := SphereMesh.new()
+	sm.radius = 0.014
+	sm.height = 0.028
+	var drop := _mesh(sm, col, Vector3(dx, -0.16, 0.004), 0.4)
+	splat.add_child(drop)
+	var t := create_tween()
+	t.tween_property(drop, "position:y", -0.42, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	t.tween_callback(drop.queue_free)
