@@ -14,6 +14,7 @@ var _code_lbl: Label
 var _players_box: VBoxContainer
 var _launch_btn: Button
 var _scene_opt: OptionButton
+var _leave_btn: Button
 var _pending := ""
 var _pending_code := ""
 static var _e2e_started := false
@@ -235,9 +236,15 @@ func _build_ui() -> void:
 	sl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	scene_row.add_child(sl)
 	_scene_opt = UI.option_button()
+	var opt_popup := _scene_opt.get_popup()
 	for s in [["salon", "Salon"], ["cimetiere", "Cimetière — squelettes"], ["foret", "Forêt — aventuriers"]]:
 		_scene_opt.add_item(s[1])
-		_scene_opt.set_item_metadata(_scene_opt.item_count - 1, s[0])
+		var i := _scene_opt.item_count - 1
+		_scene_opt.set_item_metadata(i, s[0])
+		# Pastille radio : la sélection reste repérable à la réouverture,
+		# pas seulement par la couleur du bouton.
+		opt_popup.set_item_as_radio_checkable(i, true)
+		opt_popup.set_item_icon_modulate(i, UI.INK)
 	_scene_opt.item_selected.connect(func(i: int) -> void:
 		Net.set_scene(String(_scene_opt.get_item_metadata(i))))
 	scene_row.add_child(_scene_opt)
@@ -250,14 +257,14 @@ func _build_ui() -> void:
 	_launch_btn.pressed.connect(func() -> void: Net.launch())
 	lv.add_child(_launch_btn)
 
-	var leave_btn := UI.button("Quitter la salle", "btn")
-	leave_btn.custom_minimum_size.y = 44
-	leave_btn.add_theme_font_size_override("font_size", 18)
-	leave_btn.pressed.connect(func() -> void:
+	_leave_btn = UI.button("Quitter la salle", "btn")
+	_leave_btn.custom_minimum_size.y = 44
+	_leave_btn.add_theme_font_size_override("font_size", 18)
+	_leave_btn.pressed.connect(func() -> void:
 		Net.leave()
 		_lobby.visible = false
 		_home.visible = true)
-	lv.add_child(leave_btn)
+	lv.add_child(_leave_btn)
 
 # Champ de saisie Wii : blanc, bord clair, focus bleu + halo.
 func _line_edit(placeholder: String, maxlen: int) -> LineEdit:
@@ -306,6 +313,7 @@ func _on_view(v: Dictionary) -> void:
 	if v.get("state") != "lobby":
 		return
 	_home.visible = false
+	var entering := not _lobby.visible
 	_lobby.visible = true
 	UI.pop_in(_lobby_card)
 	_room_lbl.text = v.get("name", "Table")
@@ -329,9 +337,17 @@ func _on_view(v: Dictionary) -> void:
 	_launch_btn.visible = is_host
 	_scene_opt.disabled = not is_host
 	var scene_id := String(UI.obj(v.get("options")).get("scene", "salon"))
+	var opt_popup := _scene_opt.get_popup()
 	for i in _scene_opt.item_count:
-		if String(_scene_opt.get_item_metadata(i)) == scene_id:
+		var cur := String(_scene_opt.get_item_metadata(i)) == scene_id
+		opt_popup.set_item_checked(i, cur)
+		if cur:
 			_scene_opt.select(i)
+	# Focus à l'ouverture du lobby seulement : le refaire à chaque room_state
+	# volerait le focus pendant la navigation manette.
+	if entering:
+		var first: Control = _scene_opt if is_host else _leave_btn
+		first.call_deferred("grab_focus")
 
 func _on_notice(d: Dictionary) -> void:
 	match d.get("kind", ""):

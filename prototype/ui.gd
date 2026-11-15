@@ -165,24 +165,29 @@ static func button(text: String, kind := "btn") -> Button:
 # sans ça les items restent au style par défaut (petits, sombres).
 static func option_button() -> OptionButton:
 	var o := OptionButton.new()
-	o.custom_minimum_size = Vector2(0, 44)
+	o.custom_minimum_size = Vector2(0, 56) # même gabarit tactile que les boutons
 	o.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	o.clip_text = true
+	o.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	o.add_theme_font_override("font", font_w(700))
-	o.add_theme_font_size_override("font_size", 20)
+	o.add_theme_font_size_override("font_size", 26) # ≥ 26 px : lisible sur TV
 	for c in ["font_color", "font_hover_color", "font_pressed_color",
 			"font_hover_pressed_color", "font_focus_color"]:
 		o.add_theme_color_override(c, INK)
 	o.add_theme_color_override("font_disabled_color", Color(INK, 0.5))
 	o.add_theme_stylebox_override("normal", sb(PANEL, EDGE, 14, 2))
 	o.add_theme_stylebox_override("disabled", sb(PANEL, EDGE, 14, 2))
-	for s in ["hover", "pressed", "focus"]:
+	for s in ["hover", "pressed"]:
 		o.add_theme_stylebox_override(s, sb(PANEL, BLUE, 14, 2))
+	# Focus manette : anneau plus épais, fond transparent — le stylebox focus
+	# se dessine PAR-DESSUS l'état, un fond opaque masquerait le survol.
+	o.add_theme_stylebox_override("focus", sb(Color(0, 0, 0, 0), BLUE, 14, 3))
 	# Flèche du thème par défaut : pensée pour fond sombre → teinte encre.
 	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color",
 			"icon_hover_pressed_color", "icon_focus_color"]:
 		o.add_theme_color_override(c, INK)
 	o.add_theme_color_override("icon_disabled_color", Color(INK, 0.5))
-	# Items du menu déroulant : plus gros que le bouton, survol bleu clair.
+	# Items du menu déroulant : gros texte, hauteur tactile, survol bleu clair.
 	var p := o.get_popup()
 	p.add_theme_font_override("font", font_w(700))
 	p.add_theme_font_size_override("font_size", 26)
@@ -195,7 +200,7 @@ static func option_button() -> OptionButton:
 	ps.shadow_offset = Vector2(0, 4)
 	p.add_theme_stylebox_override("panel", ps)
 	p.add_theme_stylebox_override("hover", sb(Color("#D9F1FB"), BLUE, 8, 1))
-	p.add_theme_constant_override("vseparation", 8)
+	p.add_theme_constant_override("vseparation", 10)
 	return o
 
 # Réaction tactile : le bouton s'écrase à l'appui puis rebondit.
