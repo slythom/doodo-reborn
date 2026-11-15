@@ -196,11 +196,19 @@ func _build_ui() -> void:
 	UI.pop_in(_home_card)
 
 	# --- Salle d'attente : carte blanche avec le code en grand ---
+	# Ancrée en haut, PAS centrée : quand la liste des bots grandit, la carte
+	# pousse vers le bas — « Ajouter un bot » reste fixe sous le doigt.
+	var lobby_wrap := HBoxContainer.new()
+	lobby_wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	lobby_wrap.alignment = BoxContainer.ALIGNMENT_CENTER
+	lobby_wrap.offset_top = 120
+	add_child(lobby_wrap)
+
 	_lobby = VBoxContainer.new()
 	_lobby.visible = false
 	_lobby.custom_minimum_size.x = 500
 	_lobby.add_theme_constant_override("separation", 18)
-	center.add_child(_lobby)
+	lobby_wrap.add_child(_lobby)
 
 	_lobby_card = UI.panel()
 	var lsb := _lobby_card.get_theme_stylebox("panel") as StyleBoxFlat
