@@ -1562,25 +1562,58 @@ func _item_projectile(kind: String, col: Color) -> Node3D:
 		return e
 	if kind == "poop":
 		var p := Node3D.new()
-		# Tas spiralé « soft-serve » : sphères aplaties (scale.y) empilées en
-		# zigzag sur x/z — même silhouette que l'icône 2D, plus réaliste que
-		# l'ancien alignement parfait. La teinte s'éclaircit au sommet.
-		var layers := [
-			[Vector3(0, 0.055, 0), 0.075, 0.75],
-			[Vector3(-0.012, 0.13, 0.0), 0.060, 0.72],
-			[Vector3(0.010, 0.195, 0.008), 0.045, 0.70],
-			[Vector3(-0.005, 0.25, -0.005), 0.032, 0.68],
-			[Vector3(0.014, 0.295, 0.0), 0.020, 0.80],
-			[Vector3(0.032, 0.315, 0.0), 0.012, 0.90], # bout de la vrille
-		]
-		for i in layers.size():
-			var spec: Array = layers[i]
-			var sm := SphereMesh.new()
-			sm.radius = spec[1]
-			sm.height = spec[1] * 2.0
-			var m := _mesh(sm, col.lightened(i * 0.04), spec[0], 0.5)
-			m.scale.y = spec[2]
-			p.add_child(m)
+		# Bobine réaliste : un tube balayé le long d'une hélice conique —
+		# rayon et section s'affinent vers la vrille recourbée au sommet,
+		# posé sur un socle ellipsoïde (silhouette « pile of poo » 3D).
+		var turns := 2.75
+		var segs := 110
+		var sides := 9
+		var verts := PackedVector3Array()
+		var norms := PackedVector3Array()
+		var tris := PackedInt32Array()
+		var prev := Vector3.ZERO
+		for i in segs + 1:
+			var t := float(i) / segs
+			var a := t * turns * TAU
+			var rr := 0.072 * pow(1.0 - t, 0.9)
+			var cen := Vector3(cos(a) * rr, 0.052 + t * 0.26, sin(a) * rr)
+			# Le dernier quart penche la pointe sur le côté.
+			cen.x += 0.03 * smoothstep(0.75, 1.0, t)
+			# Tube épais : diamètre ≈ la montée par tour → les spires se
+			# touchent et forment un tas plein (pas un « slinky »).
+			var rt := 0.050 * pow(1.0 - t, 0.75) + 0.002
+			var n := Vector3(cos(a), 0.0, sin(a))
+			var tan := (cen - prev).normalized() if i > 0 else Vector3.UP
+			var b := tan.cross(n).normalized()
+			for j in sides:
+				var th := j * TAU / sides
+				var off := (n * cos(th) + b * sin(th)) * rt
+				verts.append(cen + off)
+				norms.append(off.normalized())
+			prev = cen
+		for i in segs:
+			for j in sides:
+				var jn := (j + 1) % sides
+				var a0: int = i * sides + j
+				var b0: int = i * sides + jn
+				tris.append_array([a0, b0, b0 + sides, a0, b0 + sides, a0 + sides])
+		var am := ArrayMesh.new()
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = verts
+		arr[Mesh.ARRAY_NORMAL] = norms
+		arr[Mesh.ARRAY_INDEX] = tris
+		am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		var coil := MeshInstance3D.new()
+		coil.mesh = am
+		var pm := mat(col, 0.55)
+		pm.cull_mode = BaseMaterial3D.CULL_DISABLED # tube ouvert aux extrémités
+		coil.material_override = pm
+		p.add_child(coil)
+		var base := SphereMesh.new()
+		base.radius = 0.12
+		base.height = 0.05
+		p.add_child(_mesh(base, col.darkened(0.08), Vector3(0, 0.02, 0), 0.55))
 		return p
 	var sm := SphereMesh.new()
 	sm.radius = 0.055
