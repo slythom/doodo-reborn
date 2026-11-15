@@ -33,6 +33,8 @@ type ClientMsg struct {
 	Bot bool `json:"bot,omitempty"` // add_bot / remove_bot
 	// set_scene
 	Scene string `json:"scene,omitempty"`
+	// god_dice (mode dieu §4.5 : le créateur impose son tirage)
+	Dice []int `json:"dice,omitempty"`
 }
 
 // ---- Options de table (specs §1.3) ----
@@ -140,6 +142,7 @@ type View struct {
 	Winner   int      `json:"winner"`   // siège du vainqueur, -1 si n/a
 	Ranking  []int    `json:"ranking,omitempty"`
 	YourSeat int      `json:"your_seat"` // -1 pour les spectateurs
+	God      bool     `json:"god,omitempty"` // tu es le créateur en mode dieu (§4.5)
 }
 
 type Events struct {

@@ -467,6 +467,86 @@ func TestDiceCountStaysDownAcrossRounds(t *testing.T) {
 	clk.fire(500)
 }
 
+func TestGodDice(t *testing.T) {
+	clk := &fakeClock{}
+	s := &sink{}
+	opts := protocol.Options{
+		Game:           game.Options{DicePerPlayer: 3, PacoJoker: true, CalzaEnabled: true, PalificoEnabled: true},
+		TimerSeconds:   30,
+		MaxPlayers:     6,
+		BotReplacement: true,
+		Spectators:     true,
+		GodMode:        true,
+	}
+	r := New("TEST42", &Member{ID: "u1", Name: "alice"}, opts, rand.New(rand.NewSource(1)), s.emit, clk.after)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+
+	// Non-créateur : rejeté même si le mode dieu est actif.
+	if err := r.GodDice("u2", []int{6, 6, 6}); err != ErrNotHost {
+		t.Fatalf("non-créateur: attendu ErrNotHost, reçu %v", err)
+	}
+	// Mauvaise taille / face invalide.
+	if err := r.GodDice("u1", []int{6, 6}); err != game.ErrBadDice {
+		t.Fatalf("count: attendu ErrBadDice, reçu %v", err)
+	}
+	if err := r.GodDice("u1", []int{7, 6, 6}); err != game.ErrBadDice {
+		t.Fatalf("face: attendu ErrBadDice, reçu %v", err)
+	}
+	// Le tirage imposé est appliqué au siège du créateur.
+	if err := r.GodDice("u1", []int{6, 6, 6}); err != nil {
+		t.Fatalf("god_dice: %v", err)
+	}
+	seat := r.seatOfLocked("u1")
+	got := r.game.Players[seat].Dice
+	if len(got) != 3 || got[0] != 6 || got[2] != 6 {
+		t.Fatalf("tirage imposé non appliqué: %v", got)
+	}
+	// Le flag god n'apparaît que dans la vue du créateur.
+	last := s.viewsFor("u1")
+	if !last[len(last)-1].God {
+		t.Error("la vue du créateur devrait porter god=true")
+	}
+	lastBob := s.viewsFor("u2")
+	if lastBob[len(lastBob)-1].God {
+		t.Error("la vue de bob ne devrait pas porter god=true")
+	}
+	// Trop tard : une enchère est posée — le tirage est figé pour la manche.
+	bidder, caller := "u1", "u2"
+	if r.seats[r.game.Turn].ID == "u2" {
+		bidder, caller = "u2", "u1"
+	}
+	if err := r.Act(bidder, game.Action{Type: game.ActionBid, Bid: game.Bid{Quantity: 1, Value: 4}}); err != nil {
+		t.Fatalf("bid: %v", err)
+	}
+	if err := r.GodDice("u1", []int{6, 6, 6}); err != ErrTooLate {
+		t.Fatalf("après enchère: attendu ErrTooLate, reçu %v", err)
+	}
+	// Manche suivante (démarrée en synchrone par le dudo) : la fenêtre rouvre.
+	if err := r.Act(caller, game.Action{Type: game.ActionDudo}); err != nil {
+		t.Fatalf("dudo: %v", err)
+	}
+	if r.game.Players[seat].Alive {
+		want := r.game.Players[seat].DiceCount
+		dice := make([]int, want)
+		for i := range dice {
+			dice[i] = 6
+		}
+		if err := r.GodDice("u1", dice); err != nil {
+			t.Fatalf("manche suivante: %v", err)
+		}
+	}
+}
+
+func TestGodDiceWithoutGodMode(t *testing.T) {
+	r, _, _ := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+	if err := r.GodDice("u1", []int{6, 6, 6}); err != ErrNotHost {
+		t.Fatalf("sans mode dieu: attendu ErrNotHost, reçu %v", err)
+	}
+}
+
 func TestPlayerSeesOnlyOwnDice(t *testing.T) {
 	r, clk, s := newRoom(t)
 	r.Join(&Member{ID: "u2", Name: "bob"})

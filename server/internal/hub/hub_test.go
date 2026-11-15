@@ -215,6 +215,76 @@ func TestSetOptionsEndToEnd(t *testing.T) {
 	}
 }
 
+func TestGodDiceEndToEnd(t *testing.T) {
+	h := New()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+	wsURL := "ws" + srv.URL[4:] + "/ws"
+
+	alice := dial(t, wsURL)
+	defer alice.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, alice, "alice")
+	alice.send(t, map[string]any{"type": "create"})
+	view := decodeView(t, alice.recv(t, "room_state", 3*time.Second))
+
+	bob := dial(t, wsURL)
+	defer bob.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, bob, "bob")
+	bob.send(t, map[string]any{"type": "join", "code": view.Code})
+	bob.recv(t, "room_state", 3*time.Second)
+	alice.recv(t, "room_state", 3*time.Second)
+
+	// Active le mode dieu (salle privée → autorisé).
+	alice.send(t, map[string]any{"type": "set_options", "options": map[string]any{
+		"game": map[string]any{
+			"dice_per_player": 3, "paco_joker": true,
+			"calza_enabled": true, "palifico_enabled": true,
+		},
+		"timer_seconds": 0, "max_players": 4,
+		"bot_replacement": true, "spectators": true, "god_mode": true,
+	}})
+	alice.recv(t, "room_state", 3*time.Second)
+
+	alice.send(t, map[string]any{"type": "launch"})
+	env := alice.recv(t, "room_state", 3*time.Second)
+	view = decodeView(t, env)
+	if view.State != "playing" || !view.God {
+		t.Fatalf("lancement mode dieu: state=%q god=%v", view.State, view.God)
+	}
+	// Bob n'est pas dieu.
+	bobView := decodeView(t, bob.recv(t, "room_state", 3*time.Second))
+	if bobView.God {
+		t.Fatal("bob ne devrait pas être marqué dieu")
+	}
+	// Bob tente d'imposer son tirage : rejeté.
+	bob.send(t, map[string]any{"type": "god_dice", "dice": []int{1, 1, 1}})
+	bob.recv(t, "error", 3*time.Second)
+
+	// Alice impose son tirage : appliqué à sa propre vue.
+	alice.send(t, map[string]any{"type": "god_dice", "dice": []int{6, 6, 6}})
+	env = alice.recv(t, "room_state", 3*time.Second)
+	view = decodeView(t, env)
+	var mine []int
+	for _, p := range view.Players {
+		if p.Seat == view.YourSeat {
+			mine = p.Dice
+		}
+	}
+	if len(mine) != 3 || mine[0] != 6 || mine[2] != 6 {
+		t.Fatalf("tirage imposé absent de la vue: %v", mine)
+	}
+	// En mode dieu, alice voit aussi les dés de bob.
+	seen := 0
+	for _, p := range view.Players {
+		if p.Dice != nil {
+			seen++
+		}
+	}
+	if seen != 2 {
+		t.Fatalf("mode dieu: alice devrait voir 2 mains, vu %d", seen)
+	}
+}
+
 func decodeView(t *testing.T, env protocol.Envelope) *protocol.View {
 	t.Helper()
 	raw, _ := json.Marshal(env.Data)

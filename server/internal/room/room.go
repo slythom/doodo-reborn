@@ -34,6 +34,7 @@ var (
 	ErrCannotKickSelf = errors.New("room: l'hôte ne peut pas s'expulser")
 	ErrBadOptions     = errors.New("room: options manquantes")
 	ErrTooManyPresent = errors.New("room: plus de joueurs présents que le maximum demandé")
+	ErrTooLate        = errors.New("room: tirage lancé — une enchère est déjà posée")
 )
 
 const (
@@ -502,6 +503,33 @@ func (r *Room) Chat(id, text string) {
 	r.emitLocked(nil, protocol.Envelope{Type: "notice", Data: protocol.Notice{Kind: "chat", From: m.Name, Text: text}})
 }
 
+// GodDice impose le tirage du créateur en mode dieu (§4.5) — valable tant
+// qu'aucune enchère n'est posée dans la manche : le choix remplace le
+// lancer, il ne doit pas pouvoir répondre à une enchère déjà faite.
+func (r *Room) GodDice(id string, dice []int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.IsGodModeCreator(id) {
+		return ErrNotHost
+	}
+	if r.State != "playing" || r.game == nil {
+		return ErrNotStarted
+	}
+	seat := r.seatOfLocked(id)
+	if seat < 0 || !r.game.Players[seat].Alive {
+		return ErrNoSuchPlayer
+	}
+	if r.game.HasBid {
+		return ErrTooLate
+	}
+	if err := r.game.SetDice(seat, dice); err != nil {
+		return err
+	}
+	slog.Info("tirage dieu imposé", "room", r.Code, "seat", seat)
+	r.broadcastLocked()
+	return nil
+}
+
 // Members retourne les membres joueurs (hors spectateurs) — pour le
 // matchmaking qui compte les sièges.
 func (r *Room) Members() []*Member {
@@ -727,6 +755,7 @@ func (r *Room) viewForLocked(m *Member) *protocol.View {
 		v.Over, v.Winner = r.game.Over, r.game.Winner
 	}
 	godSeeAll := r.Opts.GodMode && m.ID == r.Creator
+	v.God = godSeeAll
 	for _, p := range r.players {
 		pv := protocol.PlayerView{Seat: -1, Name: p.Name, Bot: p.Bot, Connected: p.Connected}
 		if r.seats != nil {

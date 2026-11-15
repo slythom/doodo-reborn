@@ -73,9 +73,12 @@ func _e2e() -> void:
 		if a.begins_with("--e2e-scene="):
 			scene = a.get_slice("=", 1)
 	Net.set_scene(scene)
-	# Exerce aussi le chemin options : timer 15 s posé en salle d'attente.
+	# Exerce aussi le chemin options : timer 15 s posé en salle d'attente,
+	# + mode dieu quand --e2e-god est passé (exerce la barre de tirage).
 	var eo: Dictionary = Net.view.get("options", {}).duplicate(true)
 	eo["timer_seconds"] = 15
+	if OS.get_cmdline_user_args().has("--e2e-god"):
+		eo["god_mode"] = true
 	Net.set_options(eo)
 	Net.add_bot()
 	await get_tree().create_timer(1.0).timeout
@@ -293,7 +296,7 @@ func _build_ui() -> void:
 	lv.add_child(grid)
 	for t in [["Paco joker", "paco_joker"], ["Calza", "calza_enabled"],
 			["Palifico", "palifico_enabled"], ["Bot si déco", "bot_replacement"],
-			["Spectateurs", "spectators"]]:
+			["Spectateurs", "spectators"], ["Mode dieu", "god_mode"]]:
 		var key: String = t[1]
 		var tgl := _toggle_cell(grid, t[0])
 		tgl.toggled.connect(func(on: bool) -> void: _patch_opt(key, on))
@@ -470,10 +473,12 @@ func _on_view(v: Dictionary) -> void:
 	_sync_opt(_opt_maxp, int(opts.get("max_players", 6)))
 	_sync_opt(_opt_timer, int(opts.get("timer_seconds", 30)))
 	var groups := {"paco_joker": gopts, "calza_enabled": gopts,
-		"palifico_enabled": gopts, "bot_replacement": opts, "spectators": opts}
+		"palifico_enabled": gopts, "bot_replacement": opts, "spectators": opts,
+		"god_mode": opts}
 	for k in _opt_sw:
 		var sw: UI.ThemeSwitch = _opt_sw[k]
-		sw.set_on_quiet(bool(groups[k].get(k, true)))
+		var def: bool = k != "god_mode" # god_mode est off par défaut (§4.5)
+		sw.set_on_quiet(bool(groups[k].get(k, def)))
 		sw.editable = is_host
 		sw.focus_mode = Control.FOCUS_ALL if is_host else Control.FOCUS_NONE
 		sw.mouse_filter = Control.MOUSE_FILTER_STOP if is_host else Control.MOUSE_FILTER_IGNORE

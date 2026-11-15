@@ -18,6 +18,8 @@ var (
 	ErrNoBid         = errors.New("game: aucune enchère en cours")
 	ErrCalzaDisabled = errors.New("game: calza désactivé sur cette table")
 	ErrUnknownAction = errors.New("game: action inconnue")
+	ErrNoSuchPlayer  = errors.New("game: joueur introuvable ou éliminé")
+	ErrBadDice       = errors.New("game: tirage invalide (nombre ou faces)")
 )
 
 // Options de table — sous-ensemble de §1.3 qui affecte les règles.
@@ -249,6 +251,26 @@ func (g *Game) MinBid() Bid {
 		return Bid{Quantity: 2*g.Current.Quantity + 1, Value: 2}
 	}
 	return Bid{Quantity: g.Current.Quantity + 1, Value: g.Current.Value}
+}
+
+// SetDice impose le tirage d'un joueur — mode dieu (§4.5) : le créateur
+// choisit ses dés au lieu de les lancer. Siège vivant, nombre exact de dés,
+// faces 1-6.
+func (g *Game) SetDice(seat int, dice []int) error {
+	if seat < 0 || seat >= len(g.Players) || !g.Players[seat].Alive {
+		return ErrNoSuchPlayer
+	}
+	p := g.Players[seat]
+	if len(dice) != p.DiceCount {
+		return ErrBadDice
+	}
+	for _, d := range dice {
+		if d < Paco || d > 6 {
+			return ErrBadDice
+		}
+	}
+	p.Dice = append([]int(nil), dice...)
+	return nil
 }
 
 // count décompte les dés de valeur v sur la table. Les pacos comptent comme

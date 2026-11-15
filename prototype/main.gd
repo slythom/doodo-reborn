@@ -73,6 +73,11 @@ var _last_bid_sig := ""       # signature de l'enchère (punch à chaque changem
 var _last_dice: Array = []    # ma main au dernier rafraîchissement
 var _turn_was_mine := false   # détecte le début de mon tour (pop du badge)
 var _turn_hl_seat := -1       # siège mis en valeur (tour en cours)
+# Mode dieu : le créateur compose son tirage tant qu'aucune enchère n'est posée.
+var god_bar: HBoxContainer
+var god_icons_box: HBoxContainer
+var god_icons: Array = []     # DieIcons cliquables (tap = face suivante)
+var _god_done := -1           # manche dont le tirage a été confirmé
 
 static func mat(color: Color, roughness := 0.8, emission := false) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -197,13 +202,14 @@ func _build_seats() -> void:
 		seat["badge"] = bdg.badge
 		seat["badge_sp"] = bdg.sprite
 		seat["chip"] = bdg.chip
+		seat["goddice"] = bdg.goddice
 
 # Chip pseudo + badge compteur affichés en 2D au-dessus du Mii :
 # un SubViewport rend un HBox [chip][badge] texturé sur un Sprite3D billboard.
 func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	var vp := SubViewport.new()
 	vp.transparent_bg = true
-	vp.size = Vector2i(320, 124)
+	vp.size = Vector2i(320, 168) # + rangée de dés (mode dieu)
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	# Badge compteur AU-DESSUS de la pill pseudo, centré.
 	var v := VBoxContainer.new()
@@ -216,6 +222,13 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	var chip := UI.player_chip(p_name, p_seat, 26)
 	chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(chip)
+	# Mode dieu : les dés de l'adversaire sous son pseudo (§4.5).
+	var gdice := HBoxContainer.new()
+	gdice.alignment = BoxContainer.ALIGNMENT_CENTER
+	gdice.add_theme_constant_override("separation", 3)
+	gdice.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	gdice.visible = false
+	v.add_child(gdice)
 	vp.add_child(v)
 	add_child(vp)
 
@@ -225,13 +238,14 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	sp.pixel_size = 0.004
 	sp.shaded = false
 	add_child(sp)
-	return {"sprite": sp, "badge": badge, "chip": chip}
+	return {"sprite": sp, "badge": badge, "chip": chip, "goddice": gdice}
 
 # ---- Rafraîchissement depuis le snapshot ----
 
 func _refresh() -> void:
 	_update_players()
 	_update_my_dice()
+	_update_god_bar()
 	_update_turn()
 	_update_bid()
 	_update_actions()
@@ -251,6 +265,22 @@ func _update_players() -> void:
 			seat["badge_sp"].visible = not eliminated
 		if seat.has("mii"):
 			seat["mii"].visible = not eliminated # éliminé : le Mii quitte la table
+		if seat.has("goddice"):
+			var gdice: HBoxContainer = seat["goddice"]
+			var vals := UI.arr(p.get("dice"))
+			gdice.visible = view.get("god", false) and not vals.is_empty()
+			if gdice.visible:
+				if gdice.get_child_count() != vals.size():
+					for c in gdice.get_children():
+						c.queue_free()
+					for v in vals:
+						gdice.add_child(UI.DieIcon.new(int(v), 26))
+				else:
+					for j in vals.size():
+						var di: UI.DieIcon = gdice.get_child(j)
+						if di.value != int(vals[j]):
+							di.value = int(vals[j])
+							di.queue_redraw()
 
 # Ma main : rangée d'icônes 2D dans le HUD (plus de dés 3D sur la table).
 # Les dés pop en cascade quand la main change (lancer, perte, gain).
@@ -270,6 +300,56 @@ func _update_my_dice() -> void:
 			var t := di.create_tween()
 			t.tween_property(di, "scale", Vector2.ONE, 0.3).set_delay(i * 0.05) \
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+# Barre mode dieu : visible tant que la manche n'a pas d'enchère posée et
+# que le tirage n'a pas été confirmé. Reconstruite à chaque nouvelle manche
+# (valeurs du lancer), les taps de l'utilisateur sont préservés entre les
+# rafraîchissements d'une même manche.
+var _god_built := -1 # manche pour laquelle les icônes ont été construites
+
+func _update_god_bar() -> void:
+	var me := _player_by_seat(view.get("your_seat", -1))
+	var vals := UI.arr(me.get("dice"))
+	var round_no: int = view.get("round", 0)
+	if not view.get("god", false) or view.get("state") != "playing" \
+			or view.get("has_bid", false) or view.get("over", false) \
+			or vals.is_empty() or round_no == _god_done:
+		god_bar.visible = false
+		# Rematch : round repart à 1 — les compteurs de manche doivent suivre.
+		if view.get("state") != "playing" or view.get("over", false):
+			_god_built = -1
+			_god_done = -1
+		return
+	god_bar.visible = true
+	if round_no == _god_built and god_icons.size() == vals.size():
+		return
+	_god_built = round_no
+	for c in god_icons_box.get_children():
+		c.queue_free()
+	god_icons.clear()
+	for v in vals:
+		var di := UI.DieIcon.new(int(v), 38)
+		di.mouse_filter = Control.MOUSE_FILTER_STOP
+		di.gui_input.connect(func(ev: InputEvent) -> void:
+			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
+				or (ev is InputEventScreenTouch and ev.pressed)
+			if tap:
+				di.value = di.value % 6 + 1
+				di.queue_redraw()
+				UI.punch(di, 0.12))
+		god_icons.append(di)
+		god_icons_box.add_child(di)
+	# e2e : confirme le tirage 1 s après chaque nouvelle manche.
+	if OS.get_cmdline_user_args().has("--e2e-god"):
+		get_tree().create_timer(1.0).timeout.connect(_god_confirm)
+
+func _god_confirm() -> void:
+	var dice: Array = []
+	for di in god_icons:
+		dice.append(di.value)
+	_god_done = view.get("round", 0)
+	god_bar.visible = false
+	Net.god_dice(dice)
 
 func _player_by_seat(seat: int) -> Dictionary:
 	for p in UI.arr(view.get("players")):
@@ -812,6 +892,25 @@ func _hud() -> void:
 	var av := VBoxContainer.new()
 	av.add_theme_constant_override("separation", 11)
 	action_bar.add_child(av)
+
+	# Barre mode dieu : « Tes dés » + dés cliquables (tap = face suivante) +
+	# « OK ». Visible tant qu'aucune enchère n'est posée dans la manche —
+	# le choix remplace le lancer (§4.5), pas d'enchère « répondue ».
+	god_bar = HBoxContainer.new()
+	god_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	god_bar.add_theme_constant_override("separation", 8)
+	god_bar.visible = false
+	av.add_child(god_bar)
+	var gl := UI.label("Tes dés —", 16, UI.ORANGE_DK, 800)
+	gl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	god_bar.add_child(gl)
+	god_icons_box = HBoxContainer.new()
+	god_icons_box.add_theme_constant_override("separation", 6)
+	god_bar.add_child(god_icons_box)
+	var gok := UI.button("OK", "btn")
+	gok.custom_minimum_size = Vector2(0, 44)
+	gok.pressed.connect(_god_confirm)
+	god_bar.add_child(gok)
 
 	# pickrow : stepper quantité [−][N][+] + sélecteur de faces.
 	var pickrow := HBoxContainer.new()

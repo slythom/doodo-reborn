@@ -165,6 +165,8 @@ func (h *Hub) dispatch(c *conn, s *session, m protocol.ClientMsg) {
 		h.roomCall(c, s, func(r *room.Room) error { return r.SetScene(s.token, m.Scene) })
 	case "set_options":
 		h.roomCall(c, s, func(r *room.Room) error { return r.SetOptions(s.token, m.Options) })
+	case "god_dice":
+		h.roomCall(c, s, func(r *room.Room) error { return r.GodDice(s.token, m.Dice) })
 	case "rematch":
 		h.roomCall(c, s, func(r *room.Room) error { return r.Rematch(s.token) })
 	case "action":

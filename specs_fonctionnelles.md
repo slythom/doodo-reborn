@@ -193,7 +193,7 @@ Deux déclinaisons distinctes :
 
 **Mode dieu (option de table)** — **dès la beta**, activable par le créateur d'une **salle privée** uniquement, aucune indication de son activation ou non en jeu, sauf pour le créateur lui-même :
 - Le créateur de la partie voit les dés de tous les adversaires en temps réel.
-- Le créateur de la partie **choisit** ses dés au lieu de les lancer, à chaque manche.
+- Le créateur de la partie **choisit** ses dés au lieu de les lancer, à chaque manche — tant qu'aucune enchère n'a été posée dans la manche (le choix remplace le lancer, il ne doit pas pouvoir répondre à une enchère déjà faite). S'il ne confirme pas, le tirage lancé est conservé.
 - Parties en mode dieu automatiquement **non classées** et exclues des stats ; indisponible via le matchmaking et le lobby public.
 - Pensé pour le fun entre amis et pour tester les règles personnalisées.
 
