@@ -1482,7 +1482,7 @@ func _make_splat_texture(col: Color) -> ImageTexture:
 func _make_stink_texture() -> ImageTexture:
 	var img := Image.create(64, 96, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
-	var col := Color(0.45, 0.6, 0.2)
+	var col := Color(0.85, 0.78, 0.15)
 	for k in 3:
 		var x0 := 14.0 + k * 18.0
 		for y in range(4, 92):
