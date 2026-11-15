@@ -14,17 +14,19 @@ const ARC_CENTER := 270.0
 # Projectiles lancés en tapant un adversaire (emotes §4.3) : couleur du
 # projectile/particules, du splat, grimace de réaction (faces Mii : 0 normal,
 # 1 joyeux, 2 en colère, 3 surpris), rotation en vol (spin : vrille Y pour le
-# caca, culbute X pour l'œuf) et dégoulinures sous le splat (drips). Ajouter
-# une entrée suffit — le serveur whitelist les mêmes ids (room.go validEmotes).
+# caca, culbute X pour l'œuf), dégoulinures sous le splat (drips) et volutes
+# de puanteur au-dessus de la cible (stink). Ajouter une entrée suffit — le
+# serveur whitelist les mêmes ids (room.go validEmotes).
 const ITEMS := {
 	"tomato": {"label": "Tomate", "color": Color(0.8, 0.1, 0.05), "splat": Color(0.8, 0.1, 0.05, 0.95), "face": 3, "spin": Vector3.ZERO, "drips": 1},
-	"poop": {"label": "Caca", "color": Color(0.45, 0.28, 0.13), "splat": Color(0.42, 0.26, 0.11, 0.95), "face": 2, "spin": Vector3(0, PI * 3.0, 0), "drips": 2},
+	"poop": {"label": "Caca", "color": Color(0.45, 0.28, 0.13), "splat": Color(0.42, 0.26, 0.11, 0.95), "face": 2, "spin": Vector3(0, PI * 3.0, 0), "drips": 2, "stink": true},
 	"egg": {"label": "Œuf pourri", "color": Color(0.85, 0.83, 0.62), "splat": Color(0.83, 0.71, 0.16, 0.95), "face": 2, "spin": Vector3(PI * 2.5, 0, 0), "drips": 1},
 }
 
 var view := {}
 var seats := {}          # seat_idx -> {mii, cup, badge, badge_sp}
 var splat_texs := {}     # kind -> ImageTexture
+var stink_tex: ImageTexture # volutes « miasme » du caca (_make_stink_texture)
 var cur_item := "tomato" # projectile armé (sélecteur HUD)
 var cam: Camera3D
 var sway_t := 0.0
@@ -94,6 +96,7 @@ func _ready() -> void:
 	randomize()
 	for kind in ITEMS:
 		splat_texs[kind] = _make_splat_texture(ITEMS[kind].splat)
+	stink_tex = _make_stink_texture()
 	view = Net.view
 	_build_scene()
 	_hud()
@@ -1474,7 +1477,76 @@ func _make_splat_texture(col: Color) -> ImageTexture:
 		Die._fill_circle(img, c, randi_range(7, 16), col)
 	return ImageTexture.create_from_image(img)
 
-# Projectile procédural : la tomate est une sphère, le caca une spirale de
+# Texture des volutes de puanteur : 3 serpentins vert olive, alpha plus
+# fort au milieu — les extrémités s'estompent (look « fumée »).
+func _make_stink_texture() -> ImageTexture:
+	var img := Image.create(64, 96, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var col := Color(0.45, 0.6, 0.2)
+	for k in 3:
+		var x0 := 14.0 + k * 18.0
+		for y in range(4, 92):
+			var x := x0 + sin(y * 0.10 + float(k) * 2.0) * 6.0
+			var a := 0.9 * clampf(sin(y * PI / 96.0) * 1.5, 0.0, 1.0)
+			Die._fill_circle(img, Vector2i(int(x), y), 2, Color(col, a))
+	return ImageTexture.create_from_image(img)
+
+# Puanteur au-dessus de la cible : volutes ondulantes + mouches en orbite
+# (inspiration « fumier + mouches » du ticket). Parenté au wrapper du
+# personnage — durée ~3 s comme le splat, sortie en fondu.
+func _add_stink(mii: Node3D) -> void:
+	var stink := Node3D.new()
+	var ay: float = mii.splat_anchor().y if mii.has_method("splat_anchor") else 1.3
+	stink.position = Vector3(0, ay + 0.45, 0.04)
+	mii.add_child(stink)
+
+	# Volutes : quad billboard — lisible de la caméra quel que soit le siège,
+	# non éclairé pour rester visible dans la nuit du cimetière.
+	var wisp := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2(0.32, 0.42)
+	var qm := StandardMaterial3D.new()
+	qm.albedo_texture = stink_tex
+	qm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	qm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	qm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	q.material = qm
+	wisp.mesh = q
+	wisp.scale = Vector3.ONE * 0.4
+	stink.add_child(wisp)
+	var pop := stink.create_tween()
+	pop.tween_property(wisp, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# Ondulation lente : respire en hauteur, tangage léger.
+	var wob := stink.create_tween().set_loops()
+	wob.tween_property(wisp, "position:y", 0.05, 1.2).set_trans(Tween.TRANS_SINE)
+	wob.parallel().tween_property(wisp, "rotation:z", 0.14, 1.2).set_trans(Tween.TRANS_SINE)
+	wob.tween_property(wisp, "position:y", -0.04, 1.2).set_trans(Tween.TRANS_SINE)
+	wob.parallel().tween_property(wisp, "rotation:z", -0.12, 1.2).set_trans(Tween.TRANS_SINE)
+
+	# Mouches : petites sphères sombres en orbite inclinée — le signe de la
+	# vitesse fixe le sens, rayon et altitude varient d'une mouche à l'autre.
+	for spec in [[0.16, 2.8, -0.02], [0.23, -3.6, 0.07]]:
+		var pivot := Node3D.new()
+		pivot.rotation.x = randf_range(-0.25, 0.25)
+		stink.add_child(pivot)
+		var fsm := SphereMesh.new()
+		fsm.radius = 0.011
+		fsm.height = 0.022
+		pivot.add_child(_mesh(fsm, Color(0.09, 0.08, 0.05), Vector3(spec[0], spec[2], 0), 0.4))
+		var ph := randf() * TAU
+		var spd: float = spec[1]
+		var orb := stink.create_tween().set_loops()
+		orb.tween_method(func(a: float) -> void: pivot.rotation.y = ph + a,
+			0.0, TAU * signf(spd), TAU / absf(spd))
+
+	# Sortie : rétractation + fondu, puis libération.
+	get_tree().create_timer(2.6).timeout.connect(func() -> void:
+		if not is_instance_valid(stink):
+			return
+		var out := stink.create_tween()
+		out.tween_property(stink, "scale", Vector3.ONE * 0.3, 0.4)
+		out.parallel().tween_property(qm, "albedo_color:a", 0.0, 0.4)
+		out.tween_callback(stink.queue_free))
 # boules décroissantes, l'œuf un ellipsoïde — silhouettes « emoji »
 # reconnaissables à cette taille.
 func _item_projectile(kind: String, col: Color) -> Node3D:
@@ -1577,6 +1649,10 @@ func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3, from := 
 	mii.set_face(item.face)
 	mii.play_flinch()
 	get_tree().create_timer(3.0).timeout.connect(func() -> void: mii.set_face(mii._face))
+
+	# Caca : la puanteur s'attarde au-dessus de la victime.
+	if item.get("stink", false):
+		_add_stink(mii)
 
 # Dégoulinures : fines traînées qui s'allongent depuis le bord bas du splat,
 # puis une goutte se détache et dévale le visage. Enfants du splat : elles
