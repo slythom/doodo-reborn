@@ -168,7 +168,7 @@ Trois points d'entrée, tous disponibles en v1 :
 
 ### 4.3 Fonctionnalités transverses
 
-- **Chat** : texte libre en salle d'attente ; en partie et en matchmaking/public, messages **prédéfinis** (ex. « Bonjour », « Merci »…) + quelques emotes prédéfinies. **Canal unique** : le chat spectateurs est visible des joueurs en cours de partie. Les listes de messages, emotes et SFX sont arrêtées en dev (non spécifiées ici).
+- **Chat** : texte libre en salle d'attente ; en partie et en matchmaking/public, messages **prédéfinis** (« Salut ! », « Bien joué ! », « Merci ! », « Oups… », « Wow ! », « GG ! », « Menteur ! ») + quelques emotes prédéfinies (tomate, caca, œuf lancés par tap sur l'adversaire). **Canal unique** : le chat spectateurs est visible des joueurs en cours de partie. La liste des SFX est arrêtée en dev (non spécifiée ici).
 - **Mode spectateur** : rejoignable depuis l'onglet « En cours » du lobby (tables publiques) ou via le lien/code (tables privées aussi). Les spectateurs voient le nombre de dés de chaque joueur, pas les valeurs. Activable/désactivable par option de table (§1.3).
 - **Reconnexion** : un joueur déconnecté a **60 s** pour revenir (même pseudo/jeton). Pendant ce temps : ses dés restent en jeu, le timer de son tour continue et son expiration déclenche l'enchère automatique (§1.4). Passé le délai : le joueur est éliminé, **ou** remplacé par un bot si l'option de table l'autorise (défaut oui). Un joueur remplacé par un bot **reprend le contrôle** s'il revient avant la fin de la partie ; un joueur éliminé revient en spectateur.
 - **Timer de tour** : si activé, à expiration → enchère minimale automatique (formule §1.4).

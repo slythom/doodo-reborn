@@ -17,6 +17,9 @@ var _scene_opt: OptionButton
 var _leave_btn: Button
 var _bot_btn: Button
 var _bots_box: VBoxContainer
+var _chat_log: VBoxContainer
+var _chat_scroll: ScrollContainer
+var _chat_edit: LineEdit
 var _opt_dice: OptionButton
 var _opt_maxp: OptionButton
 var _opt_timer: OptionButton
@@ -346,6 +349,37 @@ func _build_ui() -> void:
 	_bots_box.add_theme_constant_override("separation", 8)
 	lv.add_child(_bots_box)
 
+	# Chat de salle d'attente : texte libre tant que la partie n'est pas
+	# lancée (§4.3) — en jeu, seuls les messages prédéfinis passent.
+	var chat_hdr := UI.label("Chat", 15, UI.DIM, 800)
+	chat_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lv.add_child(chat_hdr)
+	_chat_scroll = ScrollContainer.new()
+	_chat_scroll.custom_minimum_size.y = 100
+	_chat_scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	lv.add_child(_chat_scroll)
+	_chat_log = VBoxContainer.new()
+	_chat_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chat_log.add_theme_constant_override("separation", 4)
+	_chat_scroll.add_child(_chat_log)
+	var chat_row := HBoxContainer.new()
+	chat_row.add_theme_constant_override("separation", 8)
+	lv.add_child(chat_row)
+	_chat_edit = LineEdit.new()
+	_chat_edit.placeholder_text = "Message…"
+	_chat_edit.max_length = 200
+	_chat_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chat_row.add_child(_chat_edit)
+	var chat_send := UI.button("Envoyer", "btn")
+	chat_row.add_child(chat_send)
+	var send_chat := func() -> void:
+		var t := _chat_edit.text.strip_edges()
+		if t != "":
+			Net.chat(t)
+			_chat_edit.clear()
+	chat_send.pressed.connect(send_chat)
+	_chat_edit.text_submitted.connect(func(_t: String) -> void: send_chat.call())
+
 	_launch_btn = UI.button("Lancer la partie", "primary")
 	_launch_btn.pressed.connect(func() -> void: Net.launch())
 	lv.add_child(_launch_btn)
@@ -602,6 +636,9 @@ func _on_view(v: Dictionary) -> void:
 	var entering := not _lobby.visible
 	_lobby.visible = true
 	UI.pop_in(_lobby_card)
+	if entering:
+		for c in _chat_log.get_children():
+			c.queue_free()
 	_room_lbl.text = v.get("name", "Table")
 	_code_lbl.text = v.get("code", "?")
 	for c in _players_box.get_children():
@@ -682,4 +719,15 @@ func _on_notice(d: Dictionary) -> void:
 			_browse.visible = false
 			_home.visible = true
 		"chat":
-			_set_status("%s : %s" % [d.get("from", "?"), d.get("text", "")], UI.BLUE_DK)
+			var msg := "%s : %s" % [d.get("from", "?"), UI.chat_text(d.get("text", ""))]
+			_set_status(msg, UI.BLUE_DK)
+			_chat_append(msg)
+
+func _chat_append(msg: String) -> void:
+	var l := UI.label(msg, 15, UI.INK)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_chat_log.add_child(l)
+	while _chat_log.get_child_count() > 30:
+		_chat_log.get_child(0).queue_free()
+	# Scrolle en bas après que le conteneur a refait sa mise en page.
+	_chat_scroll.scroll_vertical = _chat_scroll.get_v_scroll_bar().max_value

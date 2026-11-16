@@ -267,6 +267,17 @@ static func panel() -> PanelContainer:
 	p.add_theme_stylebox_override("panel", s)
 	return p
 
+# Messages prédéfinis du chat en partie (§4.3) — le serveur whitelist les
+# ids en jeu ; le texte libre n'est possible qu'en salle d'attente.
+const CHAT_MSGS := {
+	"salut": "Salut !", "bj": "Bien joué !", "merci": "Merci !",
+	"oups": "Oups…", "wow": "Wow !", "gg": "GG !", "menteur": "Menteur !",
+}
+
+# Traduit un id prédéfini en libellé d'affichage — le texte libre passe tel quel.
+static func chat_text(id_or_text: String) -> String:
+	return CHAT_MSGS.get(id_or_text, id_or_text)
+
 # JSON : une clé présente à null ne prend PAS le défaut de Dictionary.get,
 # et « x or [] » renvoie un bool en GDScript — d'où ces gardes.
 static func arr(v: Variant) -> Array:

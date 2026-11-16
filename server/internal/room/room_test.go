@@ -321,6 +321,36 @@ func TestEmoteWhitelist(t *testing.T) {
 	}
 }
 
+// Chat : texte libre en salle d'attente, ids prédéfinis uniquement en
+// partie — le canal reste unique (joueurs + spectateurs, §4.3).
+func TestChatFreeVsPredefined(t *testing.T) {
+	r, _, s := newRoom(t)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	chatTexts := func() []string {
+		var out []string
+		for _, m := range s.msgs {
+			if n, ok := m.env.Data.(protocol.Notice); ok && m.env.Type == "notice" && n.Kind == "chat" {
+				out = append(out, n.Text)
+			}
+		}
+		return out
+	}
+	r.Chat("u1", "bonjour les amis")
+	r.Chat("u2", "salut") // id prédéfini accepté aussi en lobby
+	if got := chatTexts(); len(got) != 2 || got[0] != "bonjour les amis" || got[1] != "salut" {
+		t.Fatalf("chat lobby=%v", got)
+	}
+	s.msgs = nil
+	r.Launch("u1")
+	s.msgs = nil
+	r.Chat("u1", "texte libre interdit en jeu")
+	r.Chat("u1", "salut")
+	r.Chat("u2", "bj")
+	if got := chatTexts(); len(got) != 2 || got[0] != "salut" || got[1] != "bj" {
+		t.Fatalf("chat en jeu=%v, want [salut bj]", got)
+	}
+}
+
 func TestHostTransfer(t *testing.T) {
 	r, _, _ := newRoom(t)
 	r.Join(&Member{ID: "u2", Name: "bob"})

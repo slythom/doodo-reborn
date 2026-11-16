@@ -39,6 +39,7 @@ var bid_pill: PanelContainer # pill blanche de l'enchère en cours
 var bid_row: HBoxContainer   # enchère en cours : quantité × icône + chip enchérisseur
 var palifico_lbl: Label
 var status_lbl: Label        # pill de toast (chat, élimination…)
+var chat_panel: PanelContainer # panneau des messages prédéfinis (§4.3)
 var my_dice_box: HBoxContainer # ma main : icônes de dés 2D
 var qty_val := 1               # quantité choisie (stepper −/+)
 var qty_lbl: Label
@@ -775,7 +776,7 @@ func _on_notice(d: Dictionary) -> void:
 				if seats.has(seat) and seats[seat].has("mii"):
 					_throw_item(seats[seat]["mii"], d.get("text"), int(d.get("from_seat", -1)))
 		"chat":
-			_set_status("%s : %s" % [d.get("from", "?"), d.get("text", "")])
+			_set_status("%s : %s" % [d.get("from", "?"), UI.chat_text(d.get("text", ""))])
 
 # ---- HUD (charte Wii — portrait uniquement) ----
 
@@ -1103,6 +1104,41 @@ func _hud() -> void:
 	over_box = VBoxContainer.new()
 	over_box.add_theme_constant_override("separation", 14)
 	oc.add_child(over_box)
+
+	# Chat en partie : messages prédéfinis uniquement (§4.3) — bouton à
+	# mi-hauteur à gauche (miroir des items à droite), panneau de choix
+	# qui s'ouvre à sa droite. Canal unique : joueurs et spectateurs
+	# peuvent tous envoyer. En dernier : au-dessus des panneaux/overlays.
+	var chat_btn := UI.button("💬", "btn")
+	chat_btn.custom_minimum_size = Vector2(60, 60)
+	chat_btn.add_theme_font_size_override("font_size", 26)
+	chat_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	chat_btn.offset_left = 14
+	chat_btn.offset_top = -30
+	chat_btn.offset_bottom = 30
+	layer.add_child(chat_btn)
+
+	chat_panel = UI.panel()
+	chat_panel.visible = false
+	var cv := VBoxContainer.new()
+	cv.add_theme_constant_override("separation", 6)
+	chat_panel.add_child(cv)
+	for id in UI.CHAT_MSGS:
+		var b := UI.button(UI.CHAT_MSGS[id], "btn")
+		b.custom_minimum_size = Vector2(180, 46)
+		b.add_theme_font_size_override("font_size", 17)
+		var mid: String = id
+		b.pressed.connect(func() -> void:
+			Net.chat(mid)
+			chat_panel.visible = false)
+		cv.add_child(b)
+	chat_panel.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	chat_panel.grow_horizontal = Control.GROW_DIRECTION_END
+	chat_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	chat_panel.offset_left = 86
+	chat_panel.offset_right = 86
+	layer.add_child(chat_panel)
+	chat_btn.pressed.connect(func() -> void: chat_panel.visible = not chat_panel.visible)
 
 # Fond « night club » commun aux overlays plein écran (révélation, fin) :
 # dégradé bleu nuit opaque + orbes lumineux + trame de pois blanche.

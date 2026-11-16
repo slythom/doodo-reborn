@@ -489,7 +489,15 @@ func (r *Room) Emote(id, targetSeat, kind string) {
 	}})
 }
 
-// Chat relaie un message au canal unique (joueurs + spectateurs, §4.3).
+// validChatMsgs est la whitelist des messages prédéfinis en partie (§4.3) —
+// les ids sont relégués tels quels, le client les traduit à l'affichage.
+var validChatMsgs = map[string]bool{
+	"salut": true, "bj": true, "merci": true, "oups": true,
+	"wow": true, "gg": true, "menteur": true,
+}
+
+// Chat relaie un message au canal unique (joueurs + spectateurs, §4.3) —
+// texte libre en salle d'attente, ids prédéfinis uniquement en partie.
 func (r *Room) Chat(id, text string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -497,7 +505,11 @@ func (r *Room) Chat(id, text string) {
 	if m == nil || text == "" {
 		return
 	}
-	if len(text) > 200 {
+	if r.State == "playing" {
+		if !validChatMsgs[text] {
+			return
+		}
+	} else if len(text) > 200 {
 		text = text[:200]
 	}
 	r.emitLocked(nil, protocol.Envelope{Type: "notice", Data: protocol.Notice{Kind: "chat", From: m.Name, Text: text}})
