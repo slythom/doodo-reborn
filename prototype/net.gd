@@ -10,6 +10,7 @@ signal room_state(view: Dictionary)
 signal game_events(events: Array)
 signal notice_msg(data: Dictionary)
 signal net_error(code: String, message: String)
+signal room_list(rooms: Array)
 
 const URL := "ws://localhost:8080/ws"
 # DOODO_PROFILE permet plusieurs instances sur la même machine (jetons
@@ -86,6 +87,8 @@ func _on_packet(txt: String) -> void:
 			game_events.emit(UI.arr(data.get("events")))
 		"notice":
 			notice_msg.emit(data)
+		"room_list":
+			room_list.emit(UI.arr(data.get("rooms")))
 		"error":
 			net_error.emit(data.get("code", "?"), data.get("message", "?"))
 
@@ -128,3 +131,4 @@ func dudo() -> void: _send({"type": "action", "action": "dudo"})
 func calza() -> void: _send({"type": "action", "action": "calza"})
 func god_dice(dice: Array) -> void: _send({"type": "god_dice", "dice": dice})
 func rematch() -> void: _send({"type": "rematch"})
+func list_rooms() -> void: _send({"type": "list_rooms"})

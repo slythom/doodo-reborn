@@ -530,6 +530,22 @@ func (r *Room) GodDice(id string, dice []int) error {
 	return nil
 }
 
+// Summary retourne la fiche publique de la salle pour le lobby (§3.2) —
+// aucune donnée secrète : ni les dés, ni les spectateurs nominativement.
+func (r *Room) Summary() protocol.RoomSummary {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return protocol.RoomSummary{
+		Code:       r.Code,
+		Name:       r.Name,
+		State:      r.State,
+		Players:    len(r.players),
+		MaxPlayers: r.Opts.MaxPlayers,
+		Spectators: len(r.spectators),
+		Options:    r.Opts,
+	}
+}
+
 // Members retourne les membres joueurs (hors spectateurs) — pour le
 // matchmaking qui compte les sièges.
 func (r *Room) Members() []*Member {

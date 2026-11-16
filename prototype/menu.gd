@@ -23,6 +23,14 @@ var _opt_timer: OptionButton
 var _opt_sw := {} # clé d'option booléenne -> UI.ThemeSwitch
 var _pending := ""
 var _pending_code := ""
+# Lobby public (§3.2) : deux onglets, liste rafraîchie par polling.
+var _browse: VBoxContainer
+var _browse_card: PanelContainer
+var _browse_rows: VBoxContainer
+var _browse_status: Label
+var _browse_tabs := {}
+var _browse_tab := "lobby" # "lobby" (en attente) | "playing" (en cours)
+var _rooms: Array = []
 static var _e2e_started := false
 
 func _ready() -> void:
@@ -38,16 +46,21 @@ func _ready() -> void:
 			"create": Net.create_room()
 			"join": Net.join_room(_pending_code)
 			"quick": Net.quick_match()
+			"browse": Net.list_rooms()
 		_pending = "")
 	Net.room_state.connect(_on_view)
 	Net.net_error.connect(func(c: String, m: String) -> void:
 		_set_status("[%s] %s" % [c, m])
+		if _browse.visible:
+			_browse_status.text = m
+			_browse_status.add_theme_color_override("font_color", UI.RED_DK)
 		# Refus serveur (ex. set_options) : pas de room_state — on resync
 		# les contrôles sur l'état canonique local pour rétracter le choix.
 		if _lobby.visible:
 			_on_view(Net.view))
 	Net.connection_closed.connect(func() -> void: _set_status("connexion perdue — reconnexion…"))
 	Net.notice_msg.connect(_on_notice)
+	Net.room_list.connect(_on_room_list)
 	if _name_edit.text == "":
 		_name_edit.text = Net.last_name
 	# Cible de focus initiale (manette/clavier) — pas de clavier virtuel sur mobile.
@@ -59,8 +72,12 @@ func _ready() -> void:
 	elif not Net.view.is_empty():
 		_on_view(Net.view)
 	# Mode test e2e : --e2e crée une salle + bot et lance la partie automatiquement.
+	# --e2e-browse : ouvre le lobby public et rejoint la première table listée.
 	# Garde : le menu peut se recharger (retour lobby) — ne pas relancer.
-	if OS.get_cmdline_user_args().has("--e2e") and not _e2e_started:
+	if OS.get_cmdline_user_args().has("--e2e-browse") and not _e2e_started:
+		_e2e_started = true
+		_e2e_browse()
+	elif OS.get_cmdline_user_args().has("--e2e") and not _e2e_started:
 		_e2e_started = true
 		_e2e()
 
@@ -79,10 +96,23 @@ func _e2e() -> void:
 	eo["timer_seconds"] = 15
 	if OS.get_cmdline_user_args().has("--e2e-god"):
 		eo["god_mode"] = true
+	if OS.get_cmdline_user_args().has("--e2e-pub"):
+		eo["public"] = true
 	Net.set_options(eo)
 	Net.add_bot()
 	await get_tree().create_timer(1.0).timeout
 	Net.launch()
+
+# e2e : ouvre le lobby public puis rejoint la première table listée —
+# exerce list_rooms + join (joueur ou spectateur selon le timing).
+func _e2e_browse() -> void:
+	_name_edit.text = "e2e-watcher"
+	_open_browse()
+	await get_tree().create_timer(2.5).timeout
+	for r in _rooms:
+		_pending_code = String(r.get("code", ""))
+		_connect("join")
+		return
 
 func _build_ui() -> void:
 	var bg := ColorRect.new()
@@ -159,6 +189,10 @@ func _build_ui() -> void:
 	var quick_btn := UI.button("Partie rapide", "btn")
 	quick_btn.pressed.connect(func() -> void: _connect("quick"))
 	cv.add_child(quick_btn)
+
+	var browse_btn := UI.button("Voir le lobby", "btn")
+	browse_btn.pressed.connect(_open_browse)
+	cv.add_child(browse_btn)
 
 	# Séparateur « — ou — ».
 	var seprow := HBoxContainer.new()
@@ -296,7 +330,8 @@ func _build_ui() -> void:
 	lv.add_child(grid)
 	for t in [["Paco joker", "paco_joker"], ["Calza", "calza_enabled"],
 			["Palifico", "palifico_enabled"], ["Bot si déco", "bot_replacement"],
-			["Spectateurs", "spectators"], ["Mode dieu", "god_mode"]]:
+			["Spectateurs", "spectators"], ["Mode dieu", "god_mode"],
+			["Publique", "public"]]:
 		var key: String = t[1]
 		var tgl := _toggle_cell(grid, t[0])
 		tgl.toggled.connect(func(on: bool) -> void: _patch_opt(key, on))
@@ -323,6 +358,66 @@ func _build_ui() -> void:
 		_lobby.visible = false
 		_home.visible = true)
 	lv.add_child(_leave_btn)
+
+	# --- Lobby public (§3.2) : deux onglets + liste des tables publiques ---
+	var browse_wrap := HBoxContainer.new()
+	browse_wrap.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	browse_wrap.alignment = BoxContainer.ALIGNMENT_CENTER
+	browse_wrap.offset_top = 120
+	add_child(browse_wrap)
+
+	_browse = VBoxContainer.new()
+	_browse.visible = false
+	_browse.custom_minimum_size.x = 500
+	_browse.add_theme_constant_override("separation", 14)
+	browse_wrap.add_child(_browse)
+
+	_browse_card = UI.panel()
+	var bsb := _browse_card.get_theme_stylebox("panel") as StyleBoxFlat
+	bsb.content_margin_left = 26
+	bsb.content_margin_right = 26
+	bsb.content_margin_top = 24
+	bsb.content_margin_bottom = 24
+	_browse.add_child(_browse_card)
+	var bv := VBoxContainer.new()
+	bv.add_theme_constant_override("separation", 12)
+	_browse_card.add_child(bv)
+
+	var btitle := UI.label("Tables publiques", 24, UI.BLUE, 700, true)
+	btitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bv.add_child(btitle)
+
+	# Onglets « En attente » / « En cours » (§3.2).
+	var tabs := HBoxContainer.new()
+	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
+	tabs.add_theme_constant_override("separation", 8)
+	bv.add_child(tabs)
+	for t in [["lobby", "En attente"], ["playing", "En cours"]]:
+		var tb := UI.button(t[1], "btn")
+		tb.custom_minimum_size = Vector2(0, 46)
+		tb.toggle_mode = true
+		var tid: String = t[0]
+		tb.pressed.connect(func() -> void: _browse_select(tid))
+		_browse_tabs[tid] = tb
+		tabs.add_child(tb)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 380)
+	bv.add_child(scroll)
+	_browse_rows = VBoxContainer.new()
+	_browse_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_browse_rows.add_theme_constant_override("separation", 8)
+	scroll.add_child(_browse_rows)
+
+	_browse_status = UI.label("", 16, UI.DIM)
+	_browse_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bv.add_child(_browse_status)
+
+	var back_btn := UI.button("Retour", "btn")
+	back_btn.pressed.connect(func() -> void:
+		_browse.visible = false
+		_home.visible = true)
+	bv.add_child(back_btn)
 
 # Ligne « libellé + liste déroulante » des options de table — valeurs en
 # metadata d'item, comme le sélecteur de décor.
@@ -370,6 +465,10 @@ func _patch_opt(key: String, value: Variant) -> void:
 		o["game"] = g
 	else:
 		o[key] = value
+	# Publique ⇒ mode dieu impossible (§4.5) : bascule atomique en un seul
+	# set_options, sinon le serveur rejetterait le couple (public + dieu).
+	if key == "public" and value == true:
+		o["god_mode"] = false
 	Net.set_options(o)
 
 # Aligne une liste sur la valeur serveur sans émettre de signal.
@@ -419,15 +518,87 @@ func _connect(pending: String) -> void:
 	if Net.is_open():
 		Net.hello(_name_edit.text.strip_edges())
 
+# --- Lobby public (§3.2) : les listes ne sont pas poussées par le serveur,
+# elles se rafraîchissent par polling tant que l'écran est affiché. ---
+
+func _open_browse() -> void:
+	_home.visible = false
+	_browse.visible = true
+	UI.pop_in(_browse_card)
+	_browse_select(_browse_tab)
+	_connect("browse")
+	_browse_tick()
+
+func _browse_tick() -> void:
+	if not _browse.visible:
+		return
+	if Net.is_open():
+		Net.list_rooms()
+	get_tree().create_timer(3.0).timeout.connect(_browse_tick)
+
+func _browse_select(tab: String) -> void:
+	_browse_tab = tab
+	for tid in _browse_tabs:
+		_browse_tabs[tid].button_pressed = (tid == tab)
+	_browse_render()
+
+func _on_room_list(rooms: Array) -> void:
+	if not _browse.visible:
+		return
+	_rooms = rooms
+	_browse_render()
+
+func _browse_render() -> void:
+	for c in _browse_rows.get_children():
+		c.queue_free()
+	var n := 0
+	for r in _rooms:
+		if r.get("state") != _browse_tab:
+			continue
+		n += 1
+		_browse_rows.add_child(_browse_row(r))
+	_browse_status.text = "" if n > 0 else (
+		"Aucune table en attente" if _browse_tab == "lobby" else "Aucune partie en cours")
+	_browse_status.add_theme_color_override("font_color", UI.DIM)
+
+# Ligne « Table de X — n/6 joueurs · dés · timer » + Rejoindre/Regarder.
+func _browse_row(r: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(info)
+	info.add_child(UI.label(r.get("name", "Table"), 18, UI.INK, 800))
+	var opts := UI.obj(r.get("options"))
+	var gopts := UI.obj(opts.get("game"))
+	var timer_txt := "sans timer" if int(opts.get("timer_seconds", 0)) == 0 \
+		else "%d s" % int(opts.get("timer_seconds"))
+	var det := "%d/%d joueurs · %d dés · %s" % [
+		int(r.get("players", 0)), int(r.get("max_players", 6)),
+		int(gopts.get("dice_per_player", 5)), timer_txt]
+	info.add_child(UI.label(det, 14, UI.DIM, 700))
+	var playing: bool = r.get("state") == "playing"
+	var jb := UI.button("Regarder" if playing else "Rejoindre", "btn")
+	jb.custom_minimum_size = Vector2(130, 52)
+	jb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var code := String(r.get("code", ""))
+	jb.pressed.connect(func() -> void:
+		_pending_code = code
+		_connect("join"))
+	row.add_child(jb)
+	return row
+
 func _on_view(v: Dictionary) -> void:
 	if v.get("state") == "playing":
 		_home.visible = false
 		_lobby.visible = false
+		_browse.visible = false
 		get_tree().call_deferred("change_scene_to_file", "res://main.tscn")
 		return
 	if v.get("state") != "lobby":
 		return
 	_home.visible = false
+	_browse.visible = false
 	var entering := not _lobby.visible
 	_lobby.visible = true
 	UI.pop_in(_lobby_card)
@@ -474,15 +645,19 @@ func _on_view(v: Dictionary) -> void:
 	_sync_opt(_opt_timer, int(opts.get("timer_seconds", 30)))
 	var groups := {"paco_joker": gopts, "calza_enabled": gopts,
 		"palifico_enabled": gopts, "bot_replacement": opts, "spectators": opts,
-		"god_mode": opts}
+		"god_mode": opts, "public": opts}
+	var public_on := bool(opts.get("public", false))
 	for k in _opt_sw:
 		var sw: UI.ThemeSwitch = _opt_sw[k]
-		var def: bool = k != "god_mode" # god_mode est off par défaut (§4.5)
+		var def: bool = not ["god_mode", "public"].has(k) # ces deux options sont off par défaut
 		sw.set_on_quiet(bool(groups[k].get(k, def)))
-		sw.editable = is_host
-		sw.focus_mode = Control.FOCUS_ALL if is_host else Control.FOCUS_NONE
-		sw.mouse_filter = Control.MOUSE_FILTER_STOP if is_host else Control.MOUSE_FILTER_IGNORE
-		sw.modulate.a = 1.0 if is_host else 0.55
+		# Mode dieu verrouillé sur une table publique (§4.5) en plus d'être
+		# réservé aux salles privées côté serveur.
+		var editable: bool = is_host and not (k == "god_mode" and public_on)
+		sw.editable = editable
+		sw.focus_mode = Control.FOCUS_ALL if editable else Control.FOCUS_NONE
+		sw.mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
+		sw.modulate.a = 1.0 if editable else 0.55
 	# Focus à l'ouverture du lobby seulement : le refaire à chaque room_state
 	# volerait le focus pendant la navigation manette.
 	if entering:
@@ -494,10 +669,12 @@ func _on_notice(d: Dictionary) -> void:
 		"kicked":
 			_set_status("Tu as été expulsé de la table")
 			_lobby.visible = false
+			_browse.visible = false
 			_home.visible = true
 		"room_closed":
 			_set_status("La salle a été fermée")
 			_lobby.visible = false
+			_browse.visible = false
 			_home.visible = true
 		"chat":
 			_set_status("%s : %s" % [d.get("from", "?"), d.get("text", "")], UI.BLUE_DK)

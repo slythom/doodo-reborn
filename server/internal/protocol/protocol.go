@@ -148,3 +148,18 @@ type View struct {
 type Events struct {
 	Events []game.Event `json:"events"`
 }
+
+// RoomSummary : ligne du lobby public (§3.2) — état + options principales.
+type RoomSummary struct {
+	Code       string  `json:"code"`
+	Name       string  `json:"name"`
+	State      string  `json:"state"`
+	Players    int     `json:"players"`
+	MaxPlayers int     `json:"max_players"`
+	Spectators int     `json:"spectators"`
+	Options    Options `json:"options"`
+}
+
+type RoomList struct {
+	Rooms []RoomSummary `json:"rooms"`
+}

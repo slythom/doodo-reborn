@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -51,10 +52,10 @@ type conn struct {
 
 type Hub struct {
 	mu       sync.Mutex
-	rooms    map[string]*room.Room       // code -> room
-	sessions map[string]*session         // token -> session
-	conns    map[string]*conn            // token -> conn
-	queue    []*session                  // file matchmaking
+	rooms    map[string]*room.Room // code -> room
+	sessions map[string]*session   // token -> session
+	conns    map[string]*conn      // token -> conn
+	queue    []*session            // file matchmaking
 	queueTmr *time.Timer
 }
 
@@ -179,6 +180,8 @@ func (h *Hub) dispatch(c *conn, s *session, m protocol.ClientMsg) {
 		if s.room != nil {
 			s.room.Emote(s.token, m.Target, m.Text)
 		}
+	case "list_rooms":
+		h.listRooms(c)
 	case "leave":
 		h.leave(s)
 	case "hello":
@@ -344,6 +347,32 @@ func (h *Hub) destroyRoom(r *room.Room) {
 	h.mu.Unlock()
 }
 
+// listRooms répond à la demande de lobby public (§3.2) : tables publiques
+// joignables (« En attente ») ou observables (« En cours », si l'option
+// spectateurs est active). Tri par code pour un ordre stable.
+func (h *Hub) listRooms(c *conn) {
+	h.mu.Lock()
+	rooms := make([]*room.Room, 0, len(h.rooms))
+	for _, r := range h.rooms {
+		rooms = append(rooms, r)
+	}
+	h.mu.Unlock()
+	var list []protocol.RoomSummary
+	for _, r := range rooms {
+		sum := r.Summary()
+		if !sum.Options.Public {
+			continue
+		}
+		if sum.State == "lobby" || (sum.State == "playing" && sum.Options.Spectators) {
+			list = append(list, sum)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Code < list[j].Code })
+	slog.Info("room list", "rooms", list)
+	h.deliver(c, protocol.Envelope{Type: "room_list", Data: protocol.RoomList{Rooms: list}})
+	slog.Info("delivered room list", "rooms", list)
+}
+
 // ---- Matchmaking (§3.3) ----
 
 func (h *Hub) quickMatch(c *conn, s *session) {
@@ -489,4 +518,3 @@ func (h *Hub) newCode() string {
 		}
 	}
 }
-

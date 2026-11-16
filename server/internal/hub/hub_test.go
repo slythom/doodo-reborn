@@ -285,6 +285,92 @@ func TestGodDiceEndToEnd(t *testing.T) {
 	}
 }
 
+func TestListRooms(t *testing.T) {
+	h := New()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+	wsURL := "ws" + srv.URL[4:] + "/ws"
+
+	// Observateur qui interroge le lobby.
+	obs := dial(t, wsURL)
+	defer obs.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, obs, "obs")
+
+	listRooms := func() protocol.RoomList {
+		obs.send(t, map[string]any{"type": "list_rooms"})
+		env := obs.recv(t, "room_list", 3*time.Second)
+		raw, _ := json.Marshal(env.Data)
+		var rl protocol.RoomList
+		if err := json.Unmarshal(raw, &rl); err != nil {
+			t.Fatal(err)
+		}
+		return rl
+	}
+
+	// Lobby vide.
+	if got := len(listRooms().Rooms); got != 0 {
+		t.Fatalf("lobby non vide: %d salles", got)
+	}
+
+	// Table publique → visible en « En attente ».
+	alice := dial(t, wsURL)
+	defer alice.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, alice, "alice")
+	alice.send(t, map[string]any{"type": "create", "public": true})
+	alice.recv(t, "room_state", 3*time.Second)
+	rooms := listRooms().Rooms
+	if len(rooms) != 1 || rooms[0].State != "lobby" || rooms[0].Players != 1 {
+		t.Fatalf("table publique absente du lobby: %+v", rooms)
+	}
+	if rooms[0].Name != "Table de alice" {
+		t.Fatalf("nom de table: %q", rooms[0].Name)
+	}
+
+	// Table privée → invisible.
+	bob := dial(t, wsURL)
+	defer bob.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, bob, "bob")
+	bob.send(t, map[string]any{"type": "create"})
+	bob.recv(t, "room_state", 3*time.Second)
+	if got := len(listRooms().Rooms); got != 1 {
+		t.Fatalf("table privée ne devrait pas apparaître: %d salles", got)
+	}
+
+	// En cours + spectateurs → visible en « En cours ».
+	alice.send(t, map[string]any{"type": "add_bot"})
+	alice.recv(t, "room_state", 3*time.Second)
+	alice.send(t, map[string]any{"type": "launch"})
+	alice.recv(t, "room_state", 3*time.Second)
+	rooms = listRooms().Rooms
+	if len(rooms) != 1 || rooms[0].State != "playing" {
+		t.Fatalf("partie en cours absente: %+v", rooms)
+	}
+
+	// Partie publique SANS spectateurs → masquée une fois lancée.
+	carol := dial(t, wsURL)
+	defer carol.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, carol, "carol")
+	carol.send(t, map[string]any{"type": "create", "public": true})
+	carol.recv(t, "room_state", 3*time.Second)
+	carol.send(t, map[string]any{"type": "set_options", "options": map[string]any{
+		"game": map[string]any{
+			"dice_per_player": 3, "paco_joker": true,
+			"calza_enabled": true, "palifico_enabled": true,
+		},
+		"timer_seconds": 0, "max_players": 4,
+		"bot_replacement": true, "spectators": false, "public": true,
+	}})
+	carol.recv(t, "room_state", 3*time.Second)
+	carol.send(t, map[string]any{"type": "add_bot"})
+	carol.recv(t, "room_state", 3*time.Second)
+	carol.send(t, map[string]any{"type": "launch"})
+	carol.recv(t, "room_state", 3*time.Second)
+	rooms = listRooms().Rooms
+	if len(rooms) != 1 || rooms[0].Name != "Table de alice" {
+		t.Fatalf("partie sans spectateurs ne devrait pas apparaître: %+v", rooms)
+	}
+}
+
 func decodeView(t *testing.T, env protocol.Envelope) *protocol.View {
 	t.Helper()
 	raw, _ := json.Marshal(env.Data)
