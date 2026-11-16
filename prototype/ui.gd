@@ -69,6 +69,30 @@ static func load_theme() -> void:
 	if cfg.load("user://settings.cfg") == OK:
 		set_dark(bool(cfg.get_value("display", "dark", false)), false)
 
+# ---- Audio : volume + mute persistés dans user://settings.cfg ----
+static var sfx_muted := false
+static var sfx_volume := 0.8
+
+static func set_audio(muted: bool, volume: float, persist := true) -> void:
+	sfx_muted = muted
+	sfx_volume = clampf(volume, 0.0, 1.0)
+	if persist:
+		var cfg := ConfigFile.new()
+		cfg.load("user://settings.cfg")
+		cfg.set_value("audio", "muted", sfx_muted)
+		cfg.set_value("audio", "volume", sfx_volume)
+		cfg.save("user://settings.cfg")
+
+# Restaure volume/mute (appelé au démarrage de chaque écran, avec load_theme).
+static func load_audio() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		set_audio(bool(cfg.get_value("audio", "muted", false)),
+			float(cfg.get_value("audio", "volume", 0.8)), false)
+
+static func sfx_db() -> float:
+	return linear_to_db(maxf(sfx_volume, 0.001))
+
 const FONT_UI := "res://assets/fonts/Nunito.ttf"
 const FONT_DISP := "res://assets/fonts/Fredoka.ttf"
 static var _f_ui: Font
@@ -514,7 +538,8 @@ class ItemIcon:
 
 # ---- ThemeSwitch : interrupteur (pill + knob animé) ----
 # icons=true : icône soleil/lune dessinée (usage clair/sombre) ;
-# icons=false : interrupteur générique (options de table).
+# labels=true : texte "ON"/"OFF" dans le rail ;
+# sinon : interrupteur générique (options de table).
 # editable=false : affichage lecture seule, l'input est ignoré.
 class ThemeSwitch:
 	extends Control
@@ -522,14 +547,16 @@ class ThemeSwitch:
 
 	var on := false
 	var icons := true
+	var labels := false
 	var editable := true
 	var _kx := 0.0 # position du knob : 0 = gauche (off), 1 = droite (on)
 	const W := 88.0
 	const H := 42.0
 
-	func _init(initial := false, with_icons := true) -> void:
+	func _init(initial := false, with_icons := true, with_labels := false) -> void:
 		on = initial
 		icons = with_icons
+		labels = with_labels
 		_kx = 1.0 if on else 0.0
 		custom_minimum_size = Vector2(W, H)
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -584,6 +611,14 @@ class ThemeSwitch:
 		draw_circle(kc + Vector2(0, 2), kr, Color(0, 0, 0, 0.18))
 		draw_circle(kc, kr, Color.WHITE)
 		draw_arc(kc, kr - 1.0, 0.0, TAU, 40, UI.EDGE_DK, 1.5, true)
+		if labels:
+			var f := UI.font()
+			var txt := "ON" if on else "OFF"
+			var tw: float = f.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+			var tx := 12.0 if on else W - 12.0 - tw
+			var col := Color.WHITE if on else Color("#26324A")
+			draw_string(f, Vector2(tx, H / 2.0 + 6.5), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, col)
+			return
 		if not icons:
 			return
 		if on:

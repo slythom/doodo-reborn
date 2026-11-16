@@ -67,6 +67,7 @@ var reveal_tween: Tween
 var _wobble_tween: Tween
 var _glow_pulse: Tween
 var reveal_gen := 0           # invalide les timers d'un reveal précédent
+var _pending_sfx: Array = []  # SFX différés pendant la révélation
 var over_root: Control        # overlay de fin de partie « night club »
 var over_box: VBoxContainer
 var rematch_btn: Button
@@ -99,6 +100,7 @@ func _mesh(mesh: PrimitiveMesh, color: Color, pos: Vector3, roughness := 0.8, em
 
 func _ready() -> void:
 	UI.load_theme()
+	UI.load_audio()
 	randomize()
 	for kind in ITEMS:
 		splat_texs[kind] = _make_splat_texture(ITEMS[kind].splat)
@@ -373,6 +375,7 @@ func _update_turn() -> void:
 		turn_lbl.visible = true
 		if not _turn_was_mine:
 			UI.punch(turn_lbl, 0.3)
+			_queue_sfx("notif-tour")
 		_turn_tween = turn_lbl.create_tween().set_loops()
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 0.55, 0.45)
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 1.0, 0.45)
@@ -516,9 +519,13 @@ func _update_actions() -> void:
 func _on_events(events: Array) -> void:
 	for e in events:
 		match e.get("type", ""):
+			"round_start":
+				_queue_sfx("dices")
 			"reveal":
 				_show_reveal(e)
 			"die_lost":
+				if e.get("player", -1) == view.get("your_seat", -1):
+					_seq_sfx("de-perdu")
 				# Verdict affiché dans l'overlay de révélation encore ouvert.
 				if reveal_panel.visible:
 					reveal_verdict_sub.text = "%s perd un dé" % _player_name(e.get("player", -1))
@@ -528,7 +535,57 @@ func _on_events(events: Array) -> void:
 			"eliminated":
 				_set_status("%s est éliminé" % _player_name(e.get("player", -1)))
 			"game_over":
+				_seq_sfx("partie-terminee")
 				_show_game_over(e)
+
+# SFX : un AudioStreamPlayer par son, créé à la demande (§4.3).
+var _sfx_players := {}
+const SFX_DIR := "res://audio/"
+
+# Joue le son immédiatement, ou le diffère au retour à la table quand
+# l'overlay de révélation est encore affiché (Continuer / fin du timer).
+func _queue_sfx(name: String) -> void:
+	if reveal_panel.visible:
+		_pending_sfx.append(name)
+	else:
+		_seq_sfx(name)
+
+# File séquentielle anti-superposition : chaque son attend la fin du
+# précédent (ex. « Dudo ! » puis « dé perdu » pendant la révélation).
+var _sfx_seq: Array = []
+var _sfx_seq_busy := false
+
+func _seq_sfx(name: String) -> void:
+	_sfx_seq.append(name)
+	_pump_sfx_seq()
+
+func _pump_sfx_seq() -> void:
+	if _sfx_seq_busy or _sfx_seq.is_empty():
+		return
+	_sfx_seq_busy = true
+	var name: String = _sfx_seq.pop_front()
+	_sfx(name)
+	get_tree().create_timer(_sfx_len(name) + 0.15).timeout.connect(
+		func() -> void:
+			if is_instance_valid(self):
+				_sfx_seq_busy = false
+				_pump_sfx_seq())
+
+func _sfx_len(name: String) -> float:
+	var s: AudioStream = load(SFX_DIR + name + ".mp3")
+	return s.get_length() if s != null else 0.5
+
+func _sfx(name: String) -> void:
+	if UI.sfx_muted:
+		return
+	var p: AudioStreamPlayer = _sfx_players.get(name)
+	if not is_instance_valid(p):
+		p = AudioStreamPlayer.new()
+		p.stream = load(SFX_DIR + name + ".mp3")
+		add_child(p)
+		_sfx_players[name] = p
+	p.volume_db = UI.sfx_db()
+	p.play()
 
 func _player_name(seat: int) -> String:
 	return _player_by_seat(seat).get("name", "?")
@@ -553,6 +610,7 @@ func _show_reveal(e: Dictionary) -> void:
 	var gen := reveal_gen
 	var calza: bool = e.get("calza", false)
 	reveal_title.text = "CALZA !" if calza else "DUDO !"
+	_seq_sfx("calza" if calza else "dudo")
 	var tcol := Color("#79DC72") if calza else Color("#FF6E66")
 	reveal_title.add_theme_color_override("font_color", tcol)
 	reveal_title.add_theme_color_override("font_outline_color", tcol.darkened(0.5))
@@ -699,6 +757,10 @@ func _hide_reveal() -> void:
 		_glow_pulse.kill()
 		_glow_pulse = null
 	reveal_panel.visible = false
+	# SFX différés pendant la révélation : enchaînés après ceux en cours.
+	for n in _pending_sfx:
+		_seq_sfx(n)
+	_pending_sfx.clear()
 
 func _show_game_over(e: Dictionary) -> void:
 	_hide_reveal()
@@ -1139,6 +1201,19 @@ func _hud() -> void:
 	chat_panel.offset_right = 86
 	layer.add_child(chat_panel)
 	chat_btn.pressed.connect(func() -> void: chat_panel.visible = not chat_panel.visible)
+
+	# Mute SFX en juego : debajo del botón de chat, persiste el ajuste.
+	var mute_btn := UI.button("🔊" if not UI.sfx_muted else "🔇", "btn")
+	mute_btn.custom_minimum_size = Vector2(60, 60)
+	mute_btn.add_theme_font_size_override("font_size", 24)
+	mute_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	mute_btn.offset_left = 14
+	mute_btn.offset_top = 44
+	mute_btn.offset_bottom = 104
+	layer.add_child(mute_btn)
+	mute_btn.pressed.connect(func() -> void:
+		UI.set_audio(not UI.sfx_muted, UI.sfx_volume)
+		mute_btn.text = "🔇" if UI.sfx_muted else "🔊")
 
 # Fond « night club » commun aux overlays plein écran (révélation, fin) :
 # dégradé bleu nuit opaque + orbes lumineux + trame de pois blanche.

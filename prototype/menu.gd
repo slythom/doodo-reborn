@@ -38,6 +38,7 @@ static var _e2e_started := false
 
 func _ready() -> void:
 	UI.load_theme()
+	UI.load_audio()
 	_build_ui()
 	Net.connection_opened.connect(func() -> void:
 		var pseudo := _name_edit.text.strip_edges()
@@ -245,6 +246,31 @@ func _build_ui() -> void:
 		UI.set_dark(on)
 		_rebuild())
 	theme_row.add_child(sw)
+
+	# Audio : volume + mute des SFX, persistés (§4.3).
+	var audio_row := HBoxContainer.new()
+	audio_row.add_theme_constant_override("separation", 10)
+	cv.add_child(audio_row)
+	var al := UI.label("Son", 18, UI.INK, 700)
+	al.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	audio_row.add_child(al)
+	var audio_spacer := Control.new()
+	audio_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	audio_row.add_child(audio_spacer)
+	var vol_slider := HSlider.new()
+	vol_slider.min_value = 0
+	vol_slider.max_value = 100
+	vol_slider.step = 5
+	vol_slider.value = UI.sfx_volume * 100
+	vol_slider.custom_minimum_size.x = 110
+	vol_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	audio_row.add_child(vol_slider)
+	var audio_sw := UI.ThemeSwitch.new(not UI.sfx_muted, false, true)
+	audio_row.add_child(audio_sw)
+	var apply_audio := func() -> void:
+		UI.set_audio(not audio_sw.on, vol_slider.value / 100.0)
+	audio_sw.toggled.connect(func(_on: bool) -> void: apply_audio.call())
+	vol_slider.drag_ended.connect(func(_changed: bool) -> void: apply_audio.call())
 
 	UI.pop_in(_home_card)
 
