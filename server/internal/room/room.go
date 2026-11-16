@@ -535,6 +535,8 @@ func (r *Room) GodDice(id string, dice []int) error {
 func (r *Room) Summary() protocol.RoomSummary {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	opts := r.Opts
+	opts.GodMode = false // jamais exposé dans la fiche publique (§4.5)
 	return protocol.RoomSummary{
 		Code:       r.Code,
 		Name:       r.Name,
@@ -542,7 +544,7 @@ func (r *Room) Summary() protocol.RoomSummary {
 		Players:    len(r.players),
 		MaxPlayers: r.Opts.MaxPlayers,
 		Spectators: len(r.spectators),
-		Options:    r.Opts,
+		Options:    opts,
 	}
 }
 
@@ -554,9 +556,10 @@ func (r *Room) Members() []*Member {
 	return append([]*Member(nil), r.players...)
 }
 
-// IsGodModeCreator indique si le mode dieu est actif pour ce membre.
+// IsGodModeCreator indique si le mode dieu est actif pour ce membre —
+// inerte tant que la salle est publique (§4.5 : salles privées uniquement).
 func (r *Room) IsGodModeCreator(id string) bool {
-	return r.Opts.GodMode && id == r.Creator
+	return r.Opts.GodMode && id == r.Creator && !r.Opts.Public
 }
 
 // ---- Internes ----
@@ -770,8 +773,14 @@ func (r *Room) viewForLocked(m *Member) *protocol.View {
 		v.Palifico = r.game.Palifico
 		v.Over, v.Winner = r.game.Over, r.game.Winner
 	}
-	godSeeAll := r.Opts.GodMode && m.ID == r.Creator
+	godSeeAll := r.IsGodModeCreator(m.ID)
 	v.God = godSeeAll
+	v.Creator = m.ID == r.Creator
+	// Le statut du mode dieu n'est révélé qu'à son bénéficiaire (§4.5) —
+	// les autres membres le voient toujours « off » dans leur vue.
+	if m.ID != r.Creator {
+		v.Options.GodMode = false
+	}
 	for _, p := range r.players {
 		pv := protocol.PlayerView{Seat: -1, Name: p.Name, Bot: p.Bot, Connected: p.Connected}
 		if r.seats != nil {

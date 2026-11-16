@@ -465,8 +465,8 @@ func _patch_opt(key: String, value: Variant) -> void:
 		o["game"] = g
 	else:
 		o[key] = value
-	# Publique ⇒ mode dieu impossible (§4.5) : bascule atomique en un seul
-	# set_options, sinon le serveur rejetterait le couple (public + dieu).
+	# Publique ⇒ mode dieu désactivé (§4.5) : bascule atomique en un seul
+	# set_options — le switch passe off et se verrouille tant que publique.
 	if key == "public" and value == true:
 		o["god_mode"] = false
 	Net.set_options(o)
@@ -647,12 +647,17 @@ func _on_view(v: Dictionary) -> void:
 		"palifico_enabled": gopts, "bot_replacement": opts, "spectators": opts,
 		"god_mode": opts, "public": opts}
 	var public_on := bool(opts.get("public", false))
+	var is_creator := bool(v.get("creator", false))
 	for k in _opt_sw:
 		var sw: UI.ThemeSwitch = _opt_sw[k]
+		# Le statut du mode dieu n'est visible que pour le créateur (§4.5) :
+		# la ligne entière (label + switch) est cachée aux autres membres.
+		sw.get_parent().visible = k != "god_mode" or is_creator
 		var def: bool = not ["god_mode", "public"].has(k) # ces deux options sont off par défaut
-		sw.set_on_quiet(bool(groups[k].get(k, def)))
-		# Mode dieu verrouillé sur une table publique (§4.5) en plus d'être
-		# réservé aux salles privées côté serveur.
+		# Le mode dieu est toujours affiché off tant que la table est publique.
+		var on: bool = bool(groups[k].get(k, def)) and not (k == "god_mode" and public_on)
+		sw.set_on_quiet(on)
+		# Mode dieu verrouillé sur une table publique (§4.5).
 		var editable: bool = is_host and not (k == "god_mode" and public_on)
 		sw.editable = editable
 		sw.focus_mode = Control.FOCUS_ALL if editable else Control.FOCUS_NONE

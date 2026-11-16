@@ -191,10 +191,11 @@ Deux déclinaisons distinctes :
 - Forcer la résolution d'une manche, expulser un joueur, terminer la partie.
 - Panneau d'admin discret en surimpression ; **invisible pour les autres joueurs** ; chaque action admin est journalisée.
 
-**Mode dieu (option de table)** — **dès la beta**, activable par le créateur d'une **salle privée** uniquement, aucune indication de son activation ou non en jeu, sauf pour le créateur lui-même :
+**Mode dieu (option de table)** — **dès la beta**, activable par le créateur d'une **salle privée** uniquement, aucune indication de son activation ou non — ni en jeu ni en salle d'attente — sauf pour le créateur lui-même (le toggle n'est affiché qu'à lui) :
 - Le créateur de la partie voit les dés de tous les adversaires en temps réel.
 - Le créateur de la partie **choisit** ses dés au lieu de les lancer, à chaque manche — tant qu'aucune enchère n'a été posée dans la manche (le choix remplace le lancer, il ne doit pas pouvoir répondre à une enchère déjà faite). S'il ne confirme pas, le tirage lancé est conservé.
-- Parties en mode dieu automatiquement **non classées** et exclues des stats ; indisponible via le matchmaking et le lobby public.
+- Passer la table en **publique** désactive le mode dieu : le toggle passe « off » et se verrouille tant que la table est publique ; repasser en **privée** le déverrouille (off — à réactiver à la main).
+- Parties en mode dieu automatiquement **non classées** et exclues des stats ; indisponible via le matchmaking, et le lobby public ne révèle jamais qu'une table est en mode dieu.
 - Pensé pour le fun entre amis et pour tester les règles personnalisées.
 
 ---

@@ -219,7 +219,6 @@ func TestSetOptionsValidation(t *testing.T) {
 		{"dés hors [3,5]", func(o *protocol.Options) { o.Game.DicePerPlayer = 7 }},
 		{"timer hors liste", func(o *protocol.Options) { o.TimerSeconds = 45 }},
 		{"max hors [2,6]", func(o *protocol.Options) { o.MaxPlayers = 9 }},
-		{"mode dieu + public", func(o *protocol.Options) { o.GodMode = true; o.Public = true }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -507,9 +506,16 @@ func TestGodDice(t *testing.T) {
 	if !last[len(last)-1].God {
 		t.Error("la vue du créateur devrait porter god=true")
 	}
+	if !last[len(last)-1].Creator || !last[len(last)-1].Options.GodMode {
+		t.Error("le créateur devrait voir creator=true et god_mode actif")
+	}
 	lastBob := s.viewsFor("u2")
-	if lastBob[len(lastBob)-1].God {
-		t.Error("la vue de bob ne devrait pas porter god=true")
+	if lastBob[len(lastBob)-1].God || lastBob[len(lastBob)-1].Creator {
+		t.Error("la vue de bob ne devrait porter ni god ni creator")
+	}
+	// Le statut du mode dieu est masqué aux non-créateurs (§4.5).
+	if lastBob[len(lastBob)-1].Options.GodMode {
+		t.Error("bob ne devrait pas voir god_mode actif dans ses options")
 	}
 	// Trop tard : une enchère est posée — le tirage est figé pour la manche.
 	bidder, caller := "u1", "u2"
@@ -535,6 +541,47 @@ func TestGodDice(t *testing.T) {
 		if err := r.GodDice("u1", dice); err != nil {
 			t.Fatalf("manche suivante: %v", err)
 		}
+	}
+}
+
+// Mode dieu dormant : god_mode + public est stocké mais inerte tant que
+// la table est publique (§4.5) — il reprend au retour en privé.
+func TestGodModeDormantWhenPublic(t *testing.T) {
+	clk := &fakeClock{}
+	s := &sink{}
+	opts := protocol.Options{
+		Game:           game.Options{DicePerPlayer: 3, PacoJoker: true, CalzaEnabled: true, PalificoEnabled: true},
+		TimerSeconds:   30,
+		MaxPlayers:     6,
+		BotReplacement: true,
+		Spectators:     true,
+		GodMode:        true,
+	}
+	r := New("TEST42", &Member{ID: "u1", Name: "alice"}, opts, rand.New(rand.NewSource(1)), s.emit, clk.after)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+
+	o := r.Opts
+	o.Public = true
+	if err := r.SetOptions("u1", &o); err != nil {
+		t.Fatalf("god_mode + public devrait être accepté: %v", err)
+	}
+	if !r.Opts.GodMode || !r.Opts.Public {
+		t.Fatal("le couple god_mode + public devrait être stocké")
+	}
+	// Vue du créateur : dormant (god=false) mais la valeur stockée reste
+	// visible pour lui — le switch reste « on » verrouillé.
+	views := s.viewsFor("u1")
+	last := views[len(views)-1]
+	if last.God {
+		t.Error("le mode dieu devrait être dormant sur une table publique")
+	}
+	if !last.Options.GodMode {
+		t.Error("god_mode devrait rester mémorisé dans la vue du créateur")
+	}
+	// En partie publique : GodDice est rejeté (mode dormant).
+	r.Launch("u1")
+	if err := r.GodDice("u1", []int{6, 6, 6}); err != ErrNotHost {
+		t.Fatalf("god_dice sur table publique: attendu ErrNotHost, reçu %v", err)
 	}
 }
 

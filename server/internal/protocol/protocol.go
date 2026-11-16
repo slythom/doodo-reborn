@@ -3,7 +3,6 @@
 package protocol
 
 import (
-	"errors"
 	"fmt"
 
 	"doodo/internal/game"
@@ -45,7 +44,7 @@ type Options struct {
 	MaxPlayers     int          `json:"max_players"`
 	BotReplacement bool         `json:"bot_replacement"`
 	Spectators     bool         `json:"spectators"`
-	GodMode        bool         `json:"god_mode"` // salles privées uniquement
+	GodMode        bool         `json:"god_mode"` // inerte tant que la salle est publique (§4.5)
 	Public         bool         `json:"public"`
 	Scene          string       `json:"scene"` // décor 3D, choisi en salle d'attente, figé au lancement
 }
@@ -65,9 +64,8 @@ func (o Options) Validate() error {
 	if o.MaxPlayers < 2 || o.MaxPlayers > 6 {
 		return fmt.Errorf("protocol: %d joueurs max hors de [2,6]", o.MaxPlayers)
 	}
-	if o.GodMode && o.Public {
-		return errors.New("protocol: mode dieu réservé aux salles privées (§4.5)")
-	}
+	// god_mode + public est toléré à la mémoire : le mode dieu est inerte
+	// tant que la table est publique — il reprend au retour en privé (§4.5).
 	return nil
 }
 
@@ -142,6 +140,7 @@ type View struct {
 	Winner   int      `json:"winner"`   // siège du vainqueur, -1 si n/a
 	Ranking  []int    `json:"ranking,omitempty"`
 	YourSeat int      `json:"your_seat"` // -1 pour les spectateurs
+	Creator  bool     `json:"creator,omitempty"` // tu es le créateur de la table
 	God      bool     `json:"god,omitempty"` // tu es le créateur en mode dieu (§4.5)
 }
 

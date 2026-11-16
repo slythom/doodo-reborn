@@ -256,10 +256,6 @@ func (h *Hub) createRoom(c *conn, s *session, m protocol.ClientMsg) {
 		opts = *m.Options
 		opts.Public = m.Public
 	}
-	// Mode dieu : salles privées uniquement (§4.5).
-	if opts.Public {
-		opts.GodMode = false
-	}
 	code := h.newCode()
 	member := &room.Member{ID: s.token, Name: s.name}
 	r := room.New(code, member, opts, nil, h.emit, func(d time.Duration, f func()) interface{ Stop() bool } {
