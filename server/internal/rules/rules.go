@@ -41,6 +41,7 @@ type Meta struct {
 	Description  string   `json:"description"`            // une ligne — infobulle / options
 	Incompatible []string `json:"incompatible,omitempty"` // ids d'autres règles perso
 	Conflicts    []string `json:"conflicts,omitempty"`    // options officielles incompatibles
+	Requires     []string `json:"requires,omitempty"`     // options officielles exigées
 	RankedSafe   bool     `json:"ranked_safe"`            // false = partie non classée (§1.5)
 }
 
@@ -68,6 +69,15 @@ type State interface {
 	DicePerPlayer() int
 	Option(key string) bool // "paco_joker" | "calza_enabled" | "palifico_enabled"
 }
+
+// Act est le type d'action passé aux hooks d'éligibilité (TurnFilter).
+type Act int
+
+const (
+	ActBid Act = iota
+	ActDudo
+	ActCalza
+)
 
 // Resolution : contexte d'une contestation passé aux hooks de perte de dé.
 type Resolution struct {
@@ -143,6 +153,27 @@ type Revealer interface {
 	PublicDice(s State, seat int) []int
 }
 
+// Éligibilité d'action : TurnFilter est appelé quand seat n'est PAS le
+// joueur de tour ; true autorise l'action hors tour (« Salsa » : enchères
+// et dudo hors tour, calza réservé au tour).
+type TurnFilter interface {
+	CanAct(s State, seat int, act Act) bool
+}
+
+// InvalidRoll : conditions de manche — déclare le lancer de seat
+// éliminatoire ; le moteur l'élimine d'office puis relance une manche
+// (« Pacobye » : tirage 100 % pacos avec 4-5 dés, §1.5).
+type InvalidRoller interface {
+	InvalidRoll(s State, seat int) bool
+}
+
+// DieStealer : perte de dé — transforme le gain d'un calza réussi en vol :
+// le moteur suspend la résolution et attend que le voleur désigne sa
+// victime (« Calzone », §1.5).
+type DieStealer interface {
+	StealsDie(r Resolution, thief int) bool
+}
+
 // ---- Registre et collection ----
 
 var registry = map[string]Rule{}
@@ -216,6 +247,11 @@ func (s *Set) CheckOptions(enabled map[string]bool) error {
 		for _, key := range m.Conflicts {
 			if enabled[key] {
 				return fmt.Errorf("rules: %q incompatible avec l'option %q", m.ID, key)
+			}
+		}
+		for _, key := range m.Requires {
+			if !enabled[key] {
+				return fmt.Errorf("rules: %q requiert l'option %q", m.ID, key)
 			}
 		}
 	}
@@ -323,6 +359,37 @@ func (s *Set) RoundStart(st State) RoundMod {
 		}
 	}
 	return mod
+}
+
+// CanAct : un TurnFilter suffit pour autoriser l'action hors tour.
+func (s *Set) CanAct(st State, seat int, act Act) bool {
+	for _, r := range s.each() {
+		if f, ok := r.(TurnFilter); ok && f.CanAct(st, seat, act) {
+			return true
+		}
+	}
+	return false
+}
+
+// InvalidRoll : un InvalidRoller suffit pour déclarer le lancer
+// éliminatoire.
+func (s *Set) InvalidRoll(st State, seat int) bool {
+	for _, r := range s.each() {
+		if f, ok := r.(InvalidRoller); ok && f.InvalidRoll(st, seat) {
+			return true
+		}
+	}
+	return false
+}
+
+// StealsDie : un DieStealer suffit pour transformer le gain en vol.
+func (s *Set) StealsDie(res Resolution, thief int) bool {
+	for _, r := range s.each() {
+		if f, ok := r.(DieStealer); ok && f.StealsDie(res, thief) {
+			return true
+		}
+	}
+	return false
 }
 
 // PublicDice agrège les dés dévoilés par les Revealer (dédoublonnés).

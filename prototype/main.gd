@@ -38,6 +38,7 @@ var turn_lbl: Label          # pill orange « À TOI DE JOUER ! »
 var bid_pill: PanelContainer # pill blanche de l'enchère en cours
 var bid_row: HBoxContainer   # enchère en cours : quantité × icône + chip enchérisseur
 var palifico_lbl: Label
+var rules_row: HBoxContainer # pills des règles perso actives (§1.5)
 var status_lbl: Label        # pill de toast (chat, élimination…)
 var chat_panel: PanelContainer # panneau des messages prédéfinis (§4.3)
 var my_dice_box: HBoxContainer # ma main : icônes de dés 2D
@@ -48,6 +49,9 @@ var val_face := 1
 var bid_btn: Button
 var dudo_btn: Button
 var calza_btn: Button
+var steal_panel: Control # écran de vol — règle Calzone (§1.5)
+var steal_box: VBoxContainer
+var steal_row: HBoxContainer # chips des victimes potentielles
 var action_bar: PanelContainer
 var item_icons := {}        # kind -> UI.ItemIcon (sélecteur de projectile)
 var status_gen := 0
@@ -245,7 +249,30 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 
 # ---- Rafraîchissement depuis le snapshot ----
 
+# Pills des règles perso actives : construites une fois, visibles tant que
+# la partie tourne. Les ids sont traduits en libellés courts ici (même
+# liste que le catalogue de menu.gd — prête pour la localisation v1).
+const RULE_NAMES := {
+	"de_public": "Dé public",
+	"double_paco": "Double Paco",
+	"salsa": "Salsa",
+	"calzone": "Calzone",
+	"pacobye": "Pacobye",
+}
+var _rules_built := false
+
+func _update_rules_pills() -> void:
+	if _rules_built:
+		return
+	_rules_built = true
+	var game_opts := UI.obj(UI.obj(view.get("options")).get("game"))
+	for id in UI.arr(game_opts.get("rules")):
+		var pill := UI.pill(String(RULE_NAMES.get(id, id)), Color("#E8E4FF"), Color("#6B4FC4"), 14)
+		pill.tooltip_text = String(id)
+		rules_row.add_child(pill)
+
 func _refresh() -> void:
+	_update_rules_pills()
 	_update_players()
 	_update_my_dice()
 	_update_god_bar()
@@ -270,8 +297,13 @@ func _update_players() -> void:
 			seat["mii"].visible = not eliminated # éliminé : le Mii quitte la table
 		if seat.has("goddice"):
 			var gdice: HBoxContainer = seat["goddice"]
+			# Mode dieu : tous les dés de l'adversaire (§4.5). Sinon, la
+			# règle « Dé public » expose pub_dice à toute la table (§1.5).
 			var vals := UI.arr(p.get("dice"))
-			gdice.visible = view.get("god", false) and not vals.is_empty()
+			var god_view: bool = view.get("god", false) and not vals.is_empty()
+			if not god_view:
+				vals = UI.arr(p.get("pub_dice"))
+			gdice.visible = god_view or not vals.is_empty()
 			if gdice.visible:
 				if gdice.get_child_count() != vals.size():
 					for c in gdice.get_children():
@@ -503,15 +535,76 @@ func _set_item(kind: String) -> void:
 		if now:
 			UI.punch(ic, 0.15)
 
+# Écran de vol Calzone (§1.5) : construit une fois par vol — titre,
+# consigne, puis une chip cliquable par adversaire vivant. Le tap envoie
+# l'action steal ; le snapshot suivant ferme l'écran (steal_pending → -1).
+var _steal_built := -1 # manche pour laquelle l'écran a été construit
+
+func _build_steal_picker() -> void:
+	var round_no: int = view.get("round", 0)
+	if _steal_built == round_no and steal_box.get_child_count() > 0:
+		return
+	_steal_built = round_no
+	for c in steal_box.get_children():
+		c.queue_free()
+	var title := UI.label("CALZONE !", 58, Color("#63D97A"), 700, true)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_constant_override("shadow_offset_x", 0)
+	title.add_theme_constant_override("shadow_offset_y", 5)
+	title.resized.connect(func() -> void: title.pivot_offset = title.size / 2.0)
+	steal_box.add_child(title)
+	var sub := UI.label("Calza exact — vole un dé à qui ?", 15, Color("#9AA7C6"), 800)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.uppercase = true
+	steal_box.add_child(sub)
+	steal_row = HBoxContainer.new()
+	steal_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	steal_row.add_theme_constant_override("separation", 14)
+	steal_box.add_child(steal_row)
+	var mine: int = view.get("your_seat", -1)
+	for p in UI.arr(view.get("players")):
+		var s: int = int(p.get("seat", -1))
+		if s == mine or int(p.get("dice_count", 0)) == 0:
+			continue
+		var chip := UI.player_chip(_player_name(s), s, 22)
+		chip.mouse_filter = Control.MOUSE_FILTER_STOP
+		var seat := s
+		chip.gui_input.connect(func(ev: InputEvent) -> void:
+			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
+				or (ev is InputEventScreenTouch and ev.pressed)
+			if tap:
+				Net.steal(seat))
+		steal_row.add_child(chip)
+	var hint := UI.label("Pas de choix = victime automatique à la fin du timer", 13, Color("#7E8BAE"), 700)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	steal_box.add_child(hint)
+	UI.pop_in(title)
+
 func _update_actions() -> void:
 	var spectator: bool = view.get("your_seat", -1) < 0
-	action_bar.visible = not spectator and not view.get("over", false)
+	var steal_pending: int = int(view.get("steal_pending", -1))
+	var must_steal: bool = steal_pending == view.get("your_seat", -2)
+	# Pendant un vol Calzone, la barre d'enchères est masquée : le voleur a
+	# son écran de choix, les autres (joueurs et spectateurs) attendent.
+	if steal_pending >= 0 and not must_steal:
+		_set_status("%s choisit sa victime…" % _player_name(steal_pending))
+	action_bar.visible = not spectator and not view.get("over", false) and steal_pending < 0
 	if spectator:
+		steal_panel.visible = false
+		return
+	if must_steal:
+		_build_steal_picker()
+	steal_panel.visible = must_steal
+	if steal_pending >= 0:
 		return
 	var my_turn: bool = view.get("turn", -1) == view.get("your_seat", -2) and not view.get("over", false)
-	bid_btn.disabled = not my_turn or not _legal(qty_val, val_face)
-	dudo_btn.disabled = not my_turn or not view.get("has_bid", false)
 	var game_opts := UI.obj(UI.obj(view.get("options")).get("game"))
+	# Salsa (§1.5) : enchère et dudo jouables hors de son tour — le calza
+	# reste réservé au joueur de tour.
+	var salsa: bool = UI.arr(game_opts.get("rules")).has("salsa")
+	var can_bid: bool = my_turn or salsa
+	bid_btn.disabled = not can_bid or not _legal(qty_val, val_face)
+	dudo_btn.disabled = not can_bid or not view.get("has_bid", false)
 	calza_btn.disabled = not my_turn or not view.get("has_bid", false) or not game_opts.get("calza_enabled", true)
 
 # ---- Événements serveur (révélation, pertes, fin) ----
@@ -532,6 +625,11 @@ func _on_events(events: Array) -> void:
 			"die_gained":
 				if reveal_panel.visible:
 					reveal_verdict_sub.text = "%s regagne un dé" % _player_name(e.get("player", -1))
+			"steal_pending":
+				# Calzone (§1.5) : le voleur passe à l'écran de choix ;
+				# les autres gardent la révélation (le jeu est suspendu).
+				if e.get("player", -1) == view.get("your_seat", -2):
+					_hide_reveal()
 			"eliminated":
 				_set_status("%s est éliminé" % _player_name(e.get("player", -1)))
 			"game_over":
@@ -885,6 +983,15 @@ func _hud() -> void:
 	palifico_lbl.visible = false
 	pc.add_child(palifico_lbl)
 
+	# Règles perso actives (§1.5) : une pill par règle, fixes pour toute la
+	# partie — construites une seule fois depuis options.game.rules.
+	var rc := CenterContainer.new()
+	top.add_child(rc)
+	rules_row = HBoxContainer.new()
+	rules_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	rules_row.add_theme_constant_override("separation", 6)
+	rc.add_child(rules_row)
+
 	# Toast éphémère haut-centre (chat, éliminations).
 	var sc := CenterContainer.new()
 	top.add_child(sc)
@@ -1153,6 +1260,24 @@ func _hud() -> void:
 	var hint := UI.label("La manche reprend automatiquement", 13, Color("#7E8BAE"), 700)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rv.add_child(hint)
+
+	# Écran de vol Calzone (§1.5) : même ambiance « night club » que la
+	# révélation — titre, chips des victimes cliquables, puis la vue
+	# snapshot décide de la fermeture (steal_pending repasse à -1).
+	steal_panel = Control.new()
+	steal_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	steal_panel.visible = false
+	layer.add_child(steal_panel)
+	_night_bg(steal_panel)
+	var smargin := MarginContainer.new()
+	smargin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	smargin.add_theme_constant_override("margin_top", 96)
+	smargin.add_theme_constant_override("margin_left", 22)
+	smargin.add_theme_constant_override("margin_right", 22)
+	steal_panel.add_child(smargin)
+	steal_box = VBoxContainer.new()
+	steal_box.add_theme_constant_override("separation", 24)
+	smargin.add_child(steal_box)
 
 	# Overlay fin de partie : même ambiance « night club » que la révélation.
 	over_root = Control.new()

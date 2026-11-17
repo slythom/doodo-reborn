@@ -34,6 +34,8 @@ type ClientMsg struct {
 	Scene string `json:"scene,omitempty"`
 	// god_dice (mode dieu §4.5 : le créateur impose son tirage)
 	Dice []int `json:"dice,omitempty"`
+	// steal (règle Calzone §1.5 : siège de la victime désignée)
+	Seat int `json:"seat,omitempty"`
 }
 
 // ---- Options de table (specs §1.3) ----
@@ -103,10 +105,10 @@ type Error struct {
 }
 
 type Notice struct {
-	Kind     string `json:"kind"`               // "kicked" | "room_closed" | "chat" | "emote" | "info"
-	From     string `json:"from,omitempty"`     // pseudo émetteur (chat/emote)
-	Text     string `json:"text,omitempty"`     // message ou type d'emote
-	Target   string `json:"target,omitempty"`   // siège cible (emote)
+	Kind     string `json:"kind"`                // "kicked" | "room_closed" | "chat" | "emote" | "info"
+	From     string `json:"from,omitempty"`      // pseudo émetteur (chat/emote)
+	Text     string `json:"text,omitempty"`      // message ou type d'emote
+	Target   string `json:"target,omitempty"`    // siège cible (emote)
 	FromSeat *int   `json:"from_seat,omitempty"` // siège émetteur (emote ; -1 = spectateur)
 }
 
@@ -118,7 +120,8 @@ type PlayerView struct {
 	Bot       bool   `json:"bot"`
 	Connected bool   `json:"connected"`
 	DiceCount int    `json:"dice_count"`
-	Dice      []int  `json:"dice,omitempty"` // valeurs : soi-même, ou tous en god mode
+	Dice      []int  `json:"dice,omitempty"`     // valeurs : soi-même, ou tous en god mode
+	PubDice   []int  `json:"pub_dice,omitempty"` // dés dévoilés à tous (règle perso, §1.5)
 }
 
 type View struct {
@@ -130,18 +133,19 @@ type View struct {
 	Players    []PlayerView `json:"players"`
 	Spectators int          `json:"spectators"`
 	// En jeu
-	Round    int      `json:"round"`
-	Turn     int      `json:"turn"`     // siège du joueur de tour, -1 si n/a
-	Bid      game.Bid `json:"bid"`
-	Bidder   int      `json:"bidder"`   // siège de l'enchérisseur, -1 si n/a
-	HasBid   bool     `json:"has_bid"`
-	Palifico bool     `json:"palifico"`
-	Over     bool     `json:"over"`
-	Winner   int      `json:"winner"`   // siège du vainqueur, -1 si n/a
-	Ranking  []int    `json:"ranking,omitempty"`
-	YourSeat int      `json:"your_seat"` // -1 pour les spectateurs
-	Creator  bool     `json:"creator,omitempty"` // tu es le créateur de la table
-	God      bool     `json:"god,omitempty"` // tu es le créateur en mode dieu (§4.5)
+	Round        int      `json:"round"`
+	Turn         int      `json:"turn"` // siège du joueur de tour, -1 si n/a
+	Bid          game.Bid `json:"bid"`
+	Bidder       int      `json:"bidder"` // siège de l'enchérisseur, -1 si n/a
+	HasBid       bool     `json:"has_bid"`
+	Palifico     bool     `json:"palifico"`
+	Over         bool     `json:"over"`
+	Winner       int      `json:"winner"` // siège du vainqueur, -1 si n/a
+	Ranking      []int    `json:"ranking,omitempty"`
+	YourSeat     int      `json:"your_seat"`         // -1 pour les spectateurs
+	Creator      bool     `json:"creator,omitempty"` // tu es le créateur de la table
+	God          bool     `json:"god,omitempty"`     // tu es le créateur en mode dieu (§4.5)
+	StealPending int      `json:"steal_pending"`     // calzeur devant choisir sa victime, -1 sinon (§1.5)
 }
 
 type Events struct {

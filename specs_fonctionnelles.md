@@ -83,13 +83,14 @@ Le créateur de la partie choisit avant le lancement. Les options sont **figées
 - Le moteur de règles est **modulaire** : des variantes maison — définies pendant le dev — viennent s'ajouter aux options officielles et sont activables individuellement par le créateur de la table. Les variantes de la règle de surenchère, notamment, vivent ici et non dans les options officielles.
 - Chaque règle perso déclare : un **nom**, une **description courte** (affichée dans les options de table), et ses **incompatibilités** (avec d'autres règles perso ou des options officielles — ex. une règle qui neutralise les Pacos est incompatible avec « Paco joker »).
 - Une partie avec règles personnalisées reste éligible aux stats sauf si la règle casse l'équité (déclaré par règle : `ranked_safe: false` → partie non classée).
-- La liste exacte sera arrêtée en cours de dev. Candidats d'exemple (à confirmer) :
-  - « Dé public » — un dé de chaque joueur est révélé à tous en début de manche
-  - « Double Paco » — les Pacos comptent double dans le décompte
-  - « Menteur puni » — un joueur surpris en bluff éhonté (enchère très surestimée) perd 2 dés
-  - « Survivant » — un joueur à 1 dé éliminé sur un Calza réussi adverse repart avec 1 dé
-- Le moteur de hooks (v0.7, `internal/rules`) couvre cinq points d'extension : **validation d'enchère** (`BidFilter`, `MinBidder`), **décompte** (`Weighter`), **perte/gain de dé et élimination** (`DieLoser`, `DieGainer`, `Survivor`), **conditions de manche** (`Rounder`) et **visibilité des dés** (`Revealer`). Une règle n'implémente que les hooks dont elle a besoin ; aucune règle active = jeu strictement inchangé.
-- Le client affiche les règles actives en partie (icônes + infobulles / panneau « règles de la table »).
+- Les règles implémentées (v0.8) :
+  - « **Dé public** » — un dé de chaque joueur est révélé à toute la table en début de manche (visible sous le pseudo de chacun).
+  - « **Double Paco** » — les Pacos comptent double au décompte. Requiert « Paco joker » : sans jokers, les pacos n'entrent pas au décompte et la règle serait inerte — la combinaison est refusée.
+  - « **Salsa** » — n'importe quel joueur vivant peut enchérir ou douter hors de son tour ; après chaque action, l'obligation de parler retombe sur le successeur naturel du dernier acteur. Le Calza reste réservé au joueur de tour.
+  - « **Calzone** » — sur un Calza réussi, le calzeur ne regagne pas un dé : il **vole un dé à l'adversaire de son choix** (écran de sélection ; pas de choix avant la fin du timer ou abandon = victime automatique, d'abord l'enchérisseur contesté). Inerte si le calzeur est déjà à son maximum de dés. Requiert « Calza ».
+  - « **Pacobye** » — tirage 100 % Pacos : le joueur est éliminé d'office et la manche est relancée. Ne s'applique qu'avec **4 ou 5 dés en main** ; en dessous, la règle disparaît (un tirage de 2-3 pacos ne condamne plus).
+- Le moteur de hooks (v0.7, `internal/rules` ; étendu v0.8) couvre sept points d'extension : **validation d'enchère** (`BidFilter`, `MinBidder`), **décompte** (`Weighter`), **perte/gain de dé et élimination** (`DieLoser`, `DieGainer`, `Survivor`, `DieStealer`), **conditions de manche** (`Rounder`, `InvalidRoller`), **éligibilité d'action** (`TurnFilter`) et **visibilité des dés** (`Revealer`). Une règle n'implémente que les hooks dont elle a besoin ; aucune règle active = jeu strictement inchangé.
+- Le client affiche les règles actives en partie (pills sous le bandeau d'enchère) ; les dés publics apparaissent sous le pseudo de chaque joueur.
 
 ---
 

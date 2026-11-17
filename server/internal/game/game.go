@@ -45,10 +45,18 @@ func (o Options) Validate() error {
 	if o.DicePerPlayer < 3 || o.DicePerPlayer > 5 {
 		return fmt.Errorf("game: %d dés de départ hors de [3,5]", o.DicePerPlayer)
 	}
-	if _, err := rules.Resolve(o.Rules); err != nil {
+	set, err := rules.Resolve(o.Rules)
+	if err != nil {
 		return err
 	}
-	return nil
+	// Conflits et dépendances règle ↔ options officielles (§1.5) —
+	// vérifiés ici pour qu'un réglage invalide soit refusé en salle
+	// d'attente, pas au lancement de la partie.
+	return set.CheckOptions(map[string]bool{
+		"paco_joker":       o.PacoJoker,
+		"calza_enabled":    o.CalzaEnabled,
+		"palifico_enabled": o.PalificoEnabled,
+	})
 }
 
 // Bid est une enchère « au moins Quantity dés de valeur Value sur la table ».
@@ -73,24 +81,27 @@ const (
 	ActionBid ActionType = iota
 	ActionDudo
 	ActionCalza
+	ActionSteal // vol de dé après calza réussi (règle Calzone, §1.5)
 )
 
 type Action struct {
-	Type ActionType
-	Bid  Bid // pour ActionBid uniquement
+	Type   ActionType
+	Bid    Bid // pour ActionBid uniquement
+	Target int // siège de la victime, pour ActionSteal (-1 = choix auto)
 }
 
 type EventType string
 
 const (
-	EvBid        EventType = "bid"         // Player a enchéri Bid
-	EvReveal     EventType = "reveal"      // résolution : tous les dés dévoilés, Count réel vs Bid
-	EvDieLost    EventType = "die_lost"    // Player perd un dé
-	EvDieGained  EventType = "die_gained"  // Player regagne un dé (calza réussi)
-	EvEliminated EventType = "eliminated"  // Player éliminé
-	EvRoundStart EventType = "round_start" // nouvelle manche, Player entame
-	EvPalifico   EventType = "palifico"    // la manche qui commence est une palifico
-	EvGameOver   EventType = "game_over"   // Ranking = indices du 1er au dernier
+	EvBid          EventType = "bid"           // Player a enchéri Bid
+	EvReveal       EventType = "reveal"        // résolution : tous les dés dévoilés, Count réel vs Bid
+	EvDieLost      EventType = "die_lost"      // Player perd un dé
+	EvDieGained    EventType = "die_gained"    // Player regagne un dé (calza réussi)
+	EvEliminated   EventType = "eliminated"    // Player éliminé
+	EvRoundStart   EventType = "round_start"   // nouvelle manche, Player entame
+	EvPalifico     EventType = "palifico"      // la manche qui commence est une palifico
+	EvGameOver     EventType = "game_over"     // Ranking = indices du 1er au dernier
+	EvStealPending EventType = "steal_pending" // Player doit choisir sa victime (Calzone)
 )
 
 type Event struct {
@@ -132,6 +143,9 @@ type Game struct {
 	elimOrder       []int        // ordre chronologique des éliminations
 	roll            func() int   // tirage d'un dé (1-6), injectable pour les tests
 	rules           *rules.Set   // règles perso actives — nil = jeu standard
+
+	PendingSteal int              // calzeur devant choisir sa victime, -1 sinon (§1.5)
+	pendingRes   rules.Resolution // contexte du vol en attente
 }
 
 // New crée une partie et lance la première manche. rng pilote les dés et le
@@ -165,6 +179,7 @@ func New(opts Options, ids []string, rng *rand.Rand) (*Game, error) {
 		palificoUsed:    map[int]bool{},
 		roll:            func() int { return 1 + rng.Intn(6) },
 		rules:           set,
+		PendingSteal:    -1,
 	}
 	for _, id := range ids {
 		g.Players = append(g.Players, &Player{ID: id, DiceCount: opts.DicePerPlayer, Alive: true})
@@ -173,12 +188,24 @@ func New(opts Options, ids []string, rng *rand.Rand) (*Game, error) {
 	return g, nil
 }
 
-// Apply applique l'action du joueur p (qui doit être le joueur de Turn).
+// Apply applique l'action du joueur p (qui doit être le joueur de Turn,
+// sauf si une règle TurnFilter l'autorise hors tour — ex. « Salsa », §1.5).
 func (g *Game) Apply(p int, a Action) ([]Event, error) {
 	if g.Over {
 		return nil, ErrGameOver
 	}
-	if p < 0 || p >= len(g.Players) || !g.Players[p].Alive || p != g.Turn {
+	if p < 0 || p >= len(g.Players) || !g.Players[p].Alive {
+		return nil, ErrNotYourTurn
+	}
+	// Vol en attente (Calzone) : le jeu est suspendu — seul le voleur peut
+	// agir, et seulement pour désigner sa victime.
+	if g.PendingSteal >= 0 {
+		if a.Type == ActionSteal && p == g.PendingSteal {
+			return g.steal(p, a.Target), nil
+		}
+		return nil, ErrNotYourTurn
+	}
+	if p != g.Turn && !g.rules.CanAct(g, p, actOf(a.Type)) {
 		return nil, ErrNotYourTurn
 	}
 	switch a.Type {
@@ -222,11 +249,20 @@ func (g *Game) Abandon(p int) []Event {
 	if g.Over || p < 0 || p >= len(g.Players) || !g.Players[p].Alive {
 		return nil
 	}
+	var evs []Event
+	if g.PendingSteal == p {
+		// Le voleur abandonne en plein choix : le vol est résolu
+		// automatiquement avant son élimination (règle Calzone, §1.5).
+		evs = g.steal(p, -1)
+		if g.Over {
+			return evs // la partie s'est terminée pendant le vol
+		}
+	}
 	g.Players[p].Alive = false
 	g.Players[p].DiceCount = 0
 	g.Players[p].Dice = nil
 	g.elimOrder = append(g.elimOrder, p)
-	evs := []Event{{Type: EvEliminated, Player: p}}
+	evs = append(evs, Event{Type: EvEliminated, Player: p})
 	if g.Turn == p {
 		g.Turn = g.nextAlive(p)
 	}
@@ -361,6 +397,14 @@ func (g *Game) resolve(challenger int, calza bool) []Event {
 
 	var starter int
 	if calza && count == g.Current.Quantity {
+		// Calza réussi + règle de vol (Calzone) : le calzeur choisira sa
+		// victime — la résolution se suspend jusqu'à l'action steal (§1.5).
+		if g.Players[challenger].DiceCount < g.Opts.DicePerPlayer && g.rules.StealsDie(res, challenger) {
+			g.PendingSteal = challenger
+			g.pendingRes = res
+			evs = append(evs, Event{Type: EvStealPending, Player: challenger})
+			return evs
+		}
 		// Calza réussi : le calzeur regagne un dé (plafonné à son nombre de
 		// départ — §1.4 : au max, le calza ne fait que valider l'enchère).
 		n := g.rules.DiceGained(res, challenger, 1)
@@ -393,6 +437,44 @@ func (g *Game) resolve(challenger int, calza bool) []Event {
 		return evs
 	}
 	return append(evs, g.startRound(starter)...)
+}
+
+// actOf traduit un ActionType moteur en rules.Act pour les hooks
+// d'éligibilité (ActionSteal n'a pas d'équivalent : jamais hors tour).
+func actOf(t ActionType) rules.Act {
+	switch t {
+	case ActionBid:
+		return rules.ActBid
+	case ActionDudo:
+		return rules.ActDudo
+	case ActionCalza:
+		return rules.ActCalza
+	}
+	return rules.Act(-1)
+}
+
+// steal résout un vol de dé (règle Calzone, §1.5) : la victime perd un dé,
+// le voleur en gagne un (plafonné à son nombre de départ), puis la manche
+// suivante démarre chez le voleur. Victime invalide ou -1 → repli
+// automatique : l'enchérisseur contesté, sinon le successeur du voleur.
+func (g *Game) steal(thief, victim int) []Event {
+	res := g.pendingRes
+	g.PendingSteal = -1
+	if victim < 0 || victim >= len(g.Players) || victim == thief || !g.Players[victim].Alive {
+		victim = res.BidderSeat
+		if victim == thief || victim < 0 || !g.Players[victim].Alive {
+			victim = g.nextAlive(thief)
+		}
+	}
+	evs := g.loseDie(victim, res)
+	if g.Players[thief].DiceCount < g.Opts.DicePerPlayer {
+		g.Players[thief].DiceCount++
+		evs = append(evs, Event{Type: EvDieGained, Player: thief})
+	}
+	if g.checkEnd(&evs) {
+		return evs
+	}
+	return append(evs, g.startRound(thief)...)
 }
 
 // loseDie retire un dé au joueur p ; gère l'élimination et l'armement d'une
@@ -448,6 +530,30 @@ func (g *Game) startRound(starter int) []Event {
 		for i := range p.Dice {
 			p.Dice[i] = g.roll()
 		}
+	}
+	// Lancers éliminatoires (règles perso, ex. « Pacobye ») : les fautifs
+	// sont éliminés d'office et la manche est relancée. Il doit rester au
+	// moins un joueur (§1.5).
+	var invalid []int
+	for _, seat := range g.alivePlayers() {
+		if len(g.alivePlayers())-len(invalid) <= 1 {
+			break
+		}
+		if g.rules.InvalidRoll(g, seat) {
+			invalid = append(invalid, seat)
+		}
+	}
+	if len(invalid) > 0 {
+		for _, seat := range invalid {
+			pl := g.Players[seat]
+			pl.Alive, pl.DiceCount, pl.Dice = false, 0, nil
+			g.elimOrder = append(g.elimOrder, seat)
+			evs = append(evs, Event{Type: EvEliminated, Player: seat})
+		}
+		if g.checkEnd(&evs) {
+			return evs
+		}
+		return append(evs, g.startRound(g.nextAlive(invalid[0]))...)
 	}
 	// Conditions de manche ajustables par les règles perso — appelées après
 	// le tirage pour que les hooks voient les nouveaux lancers (§1.5).

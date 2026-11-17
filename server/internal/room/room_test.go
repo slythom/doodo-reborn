@@ -648,7 +648,6 @@ func TestPlayerSeesOnlyOwnDice(t *testing.T) {
 	clk.fire(500)
 }
 
-
 func TestTurnTimerAutoBid(t *testing.T) {
 	r, clk, _ := newRoom(t)
 	r.Join(&Member{ID: "u2", Name: "bob"})
@@ -723,6 +722,93 @@ func TestActRejectsOutOfTurn(t *testing.T) {
 	err := r.Act(other, game.Action{Type: game.ActionBid, Bid: game.Bid{Quantity: 1, Value: 2}})
 	if err != game.ErrNotYourTurn {
 		t.Errorf("err=%v, want ErrNotYourTurn", err)
+	}
+	clk.fire(500)
+}
+
+func TestDePublicView(t *testing.T) {
+	clk := &fakeClock{}
+	s := &sink{}
+	opts := protocol.Options{
+		Game: game.Options{DicePerPlayer: 3, PacoJoker: true, CalzaEnabled: true,
+			Rules: []string{"de_public"}},
+		MaxPlayers: 6, TimerSeconds: 30, BotReplacement: true, Spectators: true,
+	}
+	r := New("TEST43", &Member{ID: "u1", Name: "alice"}, opts, rand.New(rand.NewSource(1)), s.emit, clk.after)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Launch("u1")
+	v := r.viewForLocked(r.memberLocked("u1"))
+	for _, pv := range v.Players {
+		if pv.DiceCount > 0 && len(pv.PubDice) != 1 {
+			t.Errorf("joueur %d : %d dés publics, want 1", pv.Seat, len(pv.PubDice))
+		}
+	}
+	// Sans la règle : pas de dé public.
+	r2, clk2, _ := newRoom(t)
+	r2.Join(&Member{ID: "u2", Name: "bob"})
+	r2.Launch("u1")
+	v2 := r2.viewForLocked(r2.memberLocked("u1"))
+	for _, pv := range v2.Players {
+		if len(pv.PubDice) != 0 {
+			t.Errorf("sans dé public : PubDice devrait être vide, got %v", pv.PubDice)
+		}
+	}
+	clk.fire(500)
+	clk2.fire(500)
+}
+
+func TestCalzoneStealThroughRoom(t *testing.T) {
+	clk := &fakeClock{}
+	s := &sink{}
+	opts := protocol.Options{
+		Game: game.Options{DicePerPlayer: 3, PacoJoker: true, CalzaEnabled: true,
+			Rules: []string{"calzone"}},
+		MaxPlayers: 6, TimerSeconds: 30, BotReplacement: true, Spectators: true,
+	}
+	r := New("TEST44", &Member{ID: "u1", Name: "alice"}, opts, rand.New(rand.NewSource(1)), s.emit, clk.after)
+	r.Join(&Member{ID: "u2", Name: "bob"})
+	r.Join(&Member{ID: "u3", Name: "carol"})
+	r.Launch("u1")
+
+	// Forcer une enchère exacte : 2 quatre, tous chez le siège 0.
+	r.game.Players[0].Dice = []int{4, 4, 6}
+	r.game.Players[1].Dice = []int{2, 3, 5}
+	r.game.Players[2].Dice = []int{2, 3, 5}
+	r.game.Players[1].DiceCount = 2 // calzeur en dessous du max → vol possible
+	turn := r.game.Turn
+	bidder := r.seats[turn].ID
+	if err := r.Act(bidder, game.Action{Type: game.ActionBid, Bid: game.Bid{Quantity: 2, Value: 4}}); err != nil {
+		t.Fatal(err)
+	}
+	// Le joueur suivant calza : décompte exact → vol en attente.
+	next := r.game.Turn
+	calzer := r.seats[next].ID
+	r.game.Players[next].DiceCount = 2 // peut voler (en dessous du max 3)
+	if err := r.Act(calzer, game.Action{Type: game.ActionCalza}); err != nil {
+		t.Fatal(err)
+	}
+	if r.game.PendingSteal != next {
+		t.Fatalf("PendingSteal=%d, want %d", r.game.PendingSteal, next)
+	}
+	// La vue expose le vol en attente.
+	v := r.viewForLocked(r.memberLocked(calzer))
+	if v.StealPending != next {
+		t.Errorf("StealPending=%d dans la vue, want %d", v.StealPending, next)
+	}
+	// Le calzeur vole au joueur 0 via l'action steal.
+	victim := 0
+	if victim == next {
+		victim = 2
+	}
+	before := r.game.Players[victim].DiceCount
+	if err := r.Act(calzer, game.Action{Type: game.ActionSteal, Target: victim}); err != nil {
+		t.Fatal(err)
+	}
+	if r.game.PendingSteal != -1 {
+		t.Error("le vol devrait être résolu")
+	}
+	if r.game.Players[victim].DiceCount != before-1 {
+		t.Errorf("victime : %d dés, want %d", r.game.Players[victim].DiceCount, before-1)
 	}
 	clk.fire(500)
 }

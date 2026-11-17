@@ -205,6 +205,8 @@ func (h *Hub) gameAction(c *conn, s *session, m protocol.ClientMsg) {
 		a = game.Action{Type: game.ActionDudo}
 	case "calza":
 		a = game.Action{Type: game.ActionCalza}
+	case "steal":
+		a = game.Action{Type: game.ActionSteal, Target: m.Seat}
 	default:
 		h.sendErr(c, "bad_action", "action inconnue: "+m.Action)
 		return

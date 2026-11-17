@@ -24,6 +24,16 @@ var _opt_dice: OptionButton
 var _opt_maxp: OptionButton
 var _opt_timer: OptionButton
 var _opt_sw := {} # clé d'option booléenne -> UI.ThemeSwitch
+var _rule_sw := {} # id de règle perso -> UI.ThemeSwitch
+
+# Catalogue client des règles perso : [libellé, id, infobulle] (§1.5).
+const RULES := [
+	["Dé public", "de_public", "Un dé de chaque joueur est révélé à tous en début de manche"],
+	["Double Paco", "double_paco", "Les pacos comptent double au décompte (requiert Paco joker)"],
+	["Salsa", "salsa", "Enchérir et douter hors de son tour"],
+	["Calzone", "calzone", "Calza réussi : vole un dé à l'adversaire de ton choix (requiert Calza)"],
+	["Pacobye", "pacobye", "Tirage 100 % pacos avec 4 ou 5 dés : élimination immédiate"],
+]
 var _pending := ""
 var _pending_code := ""
 # Lobby public (§3.2) : deux onglets, liste rafraîchie par polling.
@@ -366,6 +376,23 @@ func _build_ui() -> void:
 		tgl.toggled.connect(func(on: bool) -> void: _patch_opt(key, on))
 		_opt_sw[key] = tgl
 
+	# Règles perso (§1.5, v0.8) : ids dans options.game.rules. Les
+	# dépendances (Double Paco → Paco joker, Calzone → Calza) sont gérées
+	# par _patch_opt/_patch_rule en un seul set_options atomique.
+	var rules_hdr := UI.label("Règles perso", 15, UI.DIM, 800)
+	rules_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lv.add_child(rules_hdr)
+	var rgrid := GridContainer.new()
+	rgrid.columns = 2
+	rgrid.add_theme_constant_override("h_separation", 16)
+	lv.add_child(rgrid)
+	for t in RULES:
+		var id: String = t[1]
+		var tgl := _toggle_cell(rgrid, t[0])
+		tgl.tooltip_text = t[2]
+		tgl.toggled.connect(func(on: bool) -> void: _patch_rule(id, on))
+		_rule_sw[id] = tgl
+
 	_bot_btn = UI.button("Ajouter un bot", "btn")
 	_bot_btn.pressed.connect(func() -> void: Net.add_bot())
 	lv.add_child(_bot_btn)
@@ -519,8 +546,8 @@ func _toggle_cell(parent: Control, label_text: String) -> UI.ThemeSwitch:
 # (§1.3) vivent sous options.game.
 func _patch_opt(key: String, value: Variant) -> void:
 	var o: Dictionary = UI.obj(Net.view.get("options")).duplicate(true)
+	var g: Dictionary = UI.obj(o.get("game"))
 	if ["dice_per_player", "paco_joker", "calza_enabled", "palifico_enabled"].has(key):
-		var g: Dictionary = UI.obj(o.get("game"))
 		g[key] = value
 		o["game"] = g
 	else:
@@ -529,6 +556,35 @@ func _patch_opt(key: String, value: Variant) -> void:
 	# set_options — le switch passe off et se verrouille tant que publique.
 	if key == "public" and value == true:
 		o["god_mode"] = false
+	# Dépendances règles perso (§1.5) : couper l'option mère retire les
+	# règles qui l'exigent — le serveur refuserait le patch sinon.
+	if key == "paco_joker" and value == false:
+		UI.arr(g.get("rules")).erase("double_paco")
+		o["game"] = g
+	if key == "calza_enabled" and value == false:
+		UI.arr(g.get("rules")).erase("calzone")
+		o["game"] = g
+	Net.set_options(o)
+
+# Bascule une règle perso : maj de options.game.rules + activation des
+# options mères requises, le tout en un seul set_options atomique (§1.5).
+func _patch_rule(id: String, on: bool) -> void:
+	var o: Dictionary = UI.obj(Net.view.get("options")).duplicate(true)
+	var g: Dictionary = UI.obj(o.get("game"))
+	var rl: Array = UI.arr(g.get("rules"))
+	if on and not rl.has(id):
+		rl.append(id)
+	elif not on:
+		rl.erase(id)
+	match id:
+		"double_paco":
+			if on:
+				g["paco_joker"] = true
+		"calzone":
+			if on:
+				g["calza_enabled"] = true
+	g["rules"] = rl
+	o["game"] = g
 	Net.set_options(o)
 
 # Aligne une liste sur la valeur serveur sans émettre de signal.
@@ -726,6 +782,16 @@ func _on_view(v: Dictionary) -> void:
 		sw.focus_mode = Control.FOCUS_ALL if editable else Control.FOCUS_NONE
 		sw.mouse_filter = Control.MOUSE_FILTER_STOP if editable else Control.MOUSE_FILTER_IGNORE
 		sw.modulate.a = 1.0 if editable else 0.55
+	# Règles perso : sync depuis options.game.rules (état serveur
+	# canonique) — éditables par l'hôte uniquement.
+	var active := UI.arr(gopts.get("rules"))
+	for k in _rule_sw:
+		var sw: UI.ThemeSwitch = _rule_sw[k]
+		sw.set_on_quiet(active.has(k))
+		sw.editable = is_host
+		sw.focus_mode = Control.FOCUS_ALL if is_host else Control.FOCUS_NONE
+		sw.mouse_filter = Control.MOUSE_FILTER_STOP if is_host else Control.MOUSE_FILTER_IGNORE
+		sw.modulate.a = 1.0 if is_host else 0.55
 	# Focus à l'ouverture du lobby seulement : le refaire à chaque room_state
 	# volerait le focus pendant la navigation manette.
 	if entering:

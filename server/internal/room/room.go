@@ -38,9 +38,9 @@ var (
 )
 
 const (
-	DisconnectGrace  = 60 * time.Second // §4.2 : délai de reconnexion
-	CancelDelay      = 2 * time.Minute  // §1.4 : annulation si plus aucun humain
-	resolutionGrace  = 4 * time.Second  // marge du timer pendant la phase de révélation
+	DisconnectGrace = 60 * time.Second // §4.2 : délai de reconnexion
+	CancelDelay     = 2 * time.Minute  // §1.4 : annulation si plus aucun humain
+	resolutionGrace = 4 * time.Second  // marge du timer pendant la phase de révélation
 )
 
 type EmitFunc func(to []string, env protocol.Envelope)
@@ -354,7 +354,9 @@ func (r *Room) afterGameEventsLocked(evs []game.Event) {
 		r.stopTimerLocked()
 		return
 	}
-	if reveal {
+	if r.game.PendingSteal >= 0 {
+		r.armStealLocked(0) // vol en attente : le voleur choisit sa victime
+	} else if reveal {
 		r.armTurnLocked(resolutionGrace)
 	} else {
 		r.armTurnLocked(0)
@@ -401,7 +403,11 @@ func (r *Room) Reconnected(m *Member) {
 	r.sendViewLocked(m)
 	r.broadcastLocked()
 	if r.State == "playing" {
-		r.armTurnLocked(0) // reprise : le timer repart
+		if r.game.PendingSteal >= 0 {
+			r.armStealLocked(0)
+		} else {
+			r.armTurnLocked(0) // reprise : le timer repart
+		}
 	}
 }
 
@@ -697,6 +703,45 @@ func (r *Room) stopTimerLocked() {
 	}
 }
 
+// armStealLocked programme le choix de victime d'un vol de dé (règle
+// Calzone, §1.5) : délai court pour un bot, timer de table (15 s par
+// défaut si l'option timer est off) pour un humain — expiration = victime
+// automatique.
+func (r *Room) armStealLocked(extra time.Duration) {
+	r.stopTimerLocked()
+	if r.State != "playing" || r.game == nil || r.game.Over || r.game.PendingSteal < 0 {
+		return
+	}
+	r.timerGen++
+	gen, seat := r.timerGen, r.game.PendingSteal
+	m := r.seats[seat]
+	if m == nil {
+		return
+	}
+	if m.Bot || m.ReplacedByBot {
+		r.timer = r.newTimer(800*time.Millisecond, func() { r.stealTimeout(gen, seat) })
+		return
+	}
+	d := 15 * time.Second
+	if r.Opts.TimerSeconds > 0 {
+		d = time.Duration(r.Opts.TimerSeconds)*time.Second + extra
+	}
+	r.timer = r.newTimer(d, func() { r.stealTimeout(gen, seat) })
+}
+
+func (r *Room) stealTimeout(gen, seat int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if gen != r.timerGen || r.State != "playing" || r.game.PendingSteal != seat {
+		return
+	}
+	evs, err := r.game.Apply(seat, game.Action{Type: game.ActionSteal, Target: -1})
+	if err != nil {
+		return
+	}
+	r.afterGameEventsLocked(evs)
+}
+
 func (r *Room) botAct(gen, seat int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -784,6 +829,9 @@ func (r *Room) viewForLocked(m *Member) *protocol.View {
 		v.HasBid, v.Bid, v.Bidder = r.game.HasBid, r.game.Current, r.game.Bidder
 		v.Palifico = r.game.Palifico
 		v.Over, v.Winner = r.game.Over, r.game.Winner
+		v.StealPending = r.game.PendingSteal
+	} else {
+		v.StealPending = -1
 	}
 	godSeeAll := r.IsGodModeCreator(m.ID)
 	v.God = godSeeAll
@@ -803,6 +851,9 @@ func (r *Room) viewForLocked(m *Member) *protocol.View {
 			if p.ID == m.ID || godSeeAll {
 				pv.Dice = gp.Dice
 			}
+			// Dés dévoilés à toute la table par les règles perso (§1.5,
+			// ex. « Dé public ») — nil-sûr sans règle active.
+			pv.PubDice = r.game.Rules().PublicDice(r.game, seat)
 			if p.ID == m.ID {
 				v.YourSeat = seat
 			}

@@ -32,7 +32,7 @@ func TestLegalBid(t *testing.T) {
 	cases := []struct {
 		name          string
 		current       Bid // {0,0} = aucune enchère
-		palificoFixed int  // valeur figée en palifico, 0 = pas de palifico
+		palificoFixed int // valeur figée en palifico, 0 = pas de palifico
 		bid           Bid
 		want          bool
 	}{
@@ -317,7 +317,7 @@ func TestPalificoTriggered(t *testing.T) {
 	setDice(g, []int{6, 6}, []int{1, 1, 1}, []int{4, 4, 4})
 	g.Turn = 1
 	g.Apply(1, Action{Type: ActionBid, Bid: Bid{4, 6}}) // surestimé
-	evs, _ := g.Apply(2, Action{Type: ActionDudo})     // p1 perd → 2 dés restants? non: p1 a 3 dés → perd → 2. pas palifico
+	evs, _ := g.Apply(2, Action{Type: ActionDudo})      // p1 perd → 2 dés restants? non: p1 a 3 dés → perd → 2. pas palifico
 	// p1 passe à 2 dés : pas de palifico.
 	if g.Palifico {
 		t.Error("palifico ne devrait pas être armée")

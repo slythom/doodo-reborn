@@ -129,6 +129,8 @@ func emote(target_seat: int, kind: String) -> void: _send({"type": "emote", "tar
 func bid(quantity: int, value: int) -> void: _send({"type": "action", "action": "bid", "quantity": quantity, "value": value})
 func dudo() -> void: _send({"type": "action", "action": "dudo"})
 func calza() -> void: _send({"type": "action", "action": "calza"})
+# Règle Calzone (§1.5) : le calzeur désigne la victime de son vol de dé.
+func steal(seat: int) -> void: _send({"type": "action", "action": "steal", "seat": seat})
 func god_dice(dice: Array) -> void: _send({"type": "god_dice", "dice": dice})
 func rematch() -> void: _send({"type": "rematch"})
 func list_rooms() -> void: _send({"type": "list_rooms"})
