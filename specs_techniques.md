@@ -51,8 +51,7 @@ doodo-reborn/
 │       ├── matchmaking/
 │       ├── bot/       # IA normal (v1)
 │       └── store/     # (v1) SQLite, comptes, stats
-├── shared/            # contrats messages (schémas JSON) partagés client/serveur
-├── prototype/         # proto DA actuel (référence, sera absorbé par client/)
+├── shared/            # contrats messages (protocol.md) partagés client/serveur
 └── specs_*.md
 ```
 
@@ -81,7 +80,7 @@ doodo-reborn/
 - **Déconnexion** : joueur marqué `disconnected` (badge diffusé) + deadline 60 s ; pendant ce délai, remplacement bot ou élimination selon l'option de table ; le jeton invité ré-identifie le joueur au retour → reprise du siège si la partie n'est pas finie.
 - **Matchmaking** : file in-memory ; à 60 s → remplissage bots automatique (§3.3).
 - **Persistance v1** : `internal/store` + SQLite ; schéma : comptes, jetons invités, stats agrégées. Parties non classées (`ranked_safe:false`, mode dieu) exclues.
-- **Point ouvert — collision de jetons** : aujourd'hui un `hello` avec un jeton déjà associé à une connexion vivante **vole silencieusement la session** (les deux clients reçoivent alors la même vue / se disputent le routage). Inoffensif en prod (jeton 128 bits aléatoire, un device = un jeton) mais à durcir avant v1 : au `hello`, si le jeton a une conn vivante → ping de celle-ci ; si elle répond → nouveau jeton pour le nouvel arrivant (identité distincte), sinon → reprise normale (conn zombie). + garder `conns[token] = c` dans `onClose` sous condition (ne pas effacer l'entrée si la conn a été remplacée). *Dev : tester plusieurs instances locales via `DOODO_PROFILE=<id>` (fichier session séparé).*
+- **Collision de jetons** *(résolu, v0.9.1)* : au `hello`, si le jeton a une conn enregistrée → ping WS (2 s) ; conn vivante → jeton neuf pour le nouvel arrivant (identité distincte — collision entre devices ou instances partageant `session.cfg`) ; zombie (pas de réponse) → reprise normale de la session, la zombie est refermée après l'enregistrement de la nouvelle. `onClose` ne supprime `conns[token]` que si l'entrée pointe encore sur cette conn (reprise par un client reconnecté protégée). *Dev : tester plusieurs instances locales via `DOODO_PROFILE=<id>` (fichier session séparé).*
 
 ---
 
@@ -92,13 +91,13 @@ doodo-reborn/
 - **`game3d/`** : scène de table state-driven — les positions/visibilité de gobelets, dés, mains se déduisent du snapshot ; les événements (`bid_made`, `reveal`…) déclenchent les animations.
 - **Renderer Mobile**, portrait verrouillé, assets `.glb` générés (cf. specs_artistiques).
 - **Exports** : preset Android (SDK requis) — la **beta est Android-only** ; iOS via Xcode — **nécessite un Mac** (à provisionner avant v1 : machine ou CI macos, TestFlight/App Store l'exigent).
-- **Absorber le proto** : `prototype/` devient la base de `client/` (Miis, table, interactions déjà validées).
+- **Absorber le proto** *(fait, v0.9.2)* : `prototype/` est devenu `client/` (Miis, table, interactions déjà validées).
 
 *Acté : révélation Dudo/Calza en **écran 2D dédié** (overlay au-dessus de la scène 3D ; cf. specs_artistiques §7 — charte UI : dés alignés, comptage animé).*
 
 - **Décors 3D** : `view.scene` (id en `room_state`, choisi par le créateur en salle d'attente, figé au lancement) dispatche sur un **builder de décor** — même approche que la table actuelle : primitives + matériaux en code GDScript, ou `.glb` généré si le décor l'exige. Id inconnu (vieux client) → `salon`.
 
-*⚠️ État actuel vs cible : les §§4-6 décrivent l'architecture visée (`client/`, scènes `Lobby`/`RoomView`/`Game3D`, `net/WsClient`+`GameState`, `shared/`). Le prototype réel = `prototype/menu.gd` + `main.gd` (UI 2D et scène 3D construites en code), autoload `net.gd` (WsClient et GameState fusionnés), Miis procéduraux, ni `shared/` ni `.glb` chargé. À réaligner — doc ou code — quand le proto devient `client/`.*
+*⚠️ État actuel vs cible : `client/` et `shared/` existent (v0.9.2), mais le client reste monolithique — `menu.gd` + `main.gd` (UI 2D et scène 3D construites en code), autoload `net.gd` (WsClient et GameState fusionnés), Miis procéduraux, pas de `.glb` chargé. Les scènes `Lobby`/`RoomView`/`Game3D` et la séparation `net/WsClient`+`GameState` restent l'architecture visée, à absorber au fil des évolutions.*
 
 *Évolution prévue de `net.gd` (quand les premiers tests client ou la reconnexion+resync arriveront — pas bloquant pour la feature « scènes ») : garder `Net` en autoload/façade mince (`Net.view`, signaux inchangés) qui délègue en interne à deux `RefCounted` — `WsClient` (socket, JSON, reconnexion, session) et `GameState` (`apply(packet) → signaux`, tient `view`). But : `GameState` testable headless sans socket (`state.apply(fake_dict)`) ; zéro impact sur les appels existants. Aucun enjeu de performance : la séparation est un gain de testabilité, pas de vitesse.*
 

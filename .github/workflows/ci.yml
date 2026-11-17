@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        # Les .import sont ignorés (prototype/.gitignore) : la CI doit
+        # Les .import sont ignorés (client/.gitignore) : la CI doit
         # régénérer les artefacts d'import, comme un clone frais.
       - name: Télécharger Godot 4.7.2 headless
         run: |
@@ -43,7 +43,7 @@ jobs:
           chmod +x /tmp/godot/Godot_v4.7.2-stable_linux.x86_64
       - name: Import + parse check
         run: |
-          cd prototype
+          cd client
           timeout 120 /tmp/godot/Godot_v4.7.2-stable_linux.x86_64 --headless --import 2>&1 | tee /tmp/import.log
           if grep -qiE "SCRIPT ERROR|Parse Error" /tmp/import.log; then
             echo "::error::Erreurs de parse GDScript détectées (import)"
