@@ -317,7 +317,7 @@ func TestPalificoTriggered(t *testing.T) {
 	setDice(g, []int{6, 6}, []int{1, 1, 1}, []int{4, 4, 4})
 	g.Turn = 1
 	g.Apply(1, Action{Type: ActionBid, Bid: Bid{4, 6}}) // surestimé
-	evs, _ := g.Apply(2, Action{Type: ActionDudo})      // p1 perd → 2 dés restants? non: p1 a 3 dés → perd → 2. pas palifico
+	g.Apply(2, Action{Type: ActionDudo})                // p1 perd → 2 dés restants? non: p1 a 3 dés → perd → 2. pas palifico
 	// p1 passe à 2 dés : pas de palifico.
 	if g.Palifico {
 		t.Error("palifico ne devrait pas être armée")
@@ -327,7 +327,7 @@ func TestPalificoTriggered(t *testing.T) {
 	setDice(g, []int{6, 6}, g.Players[1].Dice, g.Players[2].Dice)
 	g.Turn = 0
 	g.Apply(0, Action{Type: ActionBid, Bid: Bid{30, 3}})
-	evs, _ = g.Apply(1, Action{Type: ActionDudo}) // p0 perd → 1 dé -> palifico armée
+	evs, _ := g.Apply(1, Action{Type: ActionDudo}) // p0 perd → 1 dé -> palifico armée
 	if g.Players[0].DiceCount != 1 {
 		t.Fatalf("p0 DiceCount=%d, want 1", g.Players[0].DiceCount)
 	}

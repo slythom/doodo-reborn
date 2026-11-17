@@ -1,0 +1,17 @@
+version: "2"
+
+# Config golangci-lint — lancez depuis server/ : golangci-lint run ./...
+# Linters par défaut de v2 : errcheck, govet, ineffassign, staticcheck,
+# unused. On garde ce socle, avec deux ajustements projet :
+linters:
+  exclusions:
+    rules:
+      # Dans les tests, ignorer les erreurs de Apply/Join/Close est
+      # idiomatique — errcheck y produit surtout du bruit.
+      - path: _test\.go$
+        linters:
+          - errcheck
+      # chemins générés éventuels
+      - path: \.pb\.go$
+        linters:
+          - errcheck

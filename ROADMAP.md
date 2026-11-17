@@ -5,8 +5,11 @@ milestones livrables et testables de bout en bout. Le périmètre détaillé est
 dans `specs_fonctionnelles.md`, l'architecture dans `specs_techniques.md`.
 
 Chaque milestone = une version mineure (`v0.x.0`) ; les correctifs suivent en
-patch (`v0.x.y`). La v1 (comptes, stats persistantes, ELO, avatars, admin,
-anglais, iOS…) est hors scope de ce document.
+patch (`v0.x.y`). Convention : **patch = même périmètre** (fix, sous-tâche du
+milestone — ex. `v0.9.1` = durcissement jetons), **mineur = nouveau périmètre**
+(ex. une règle perso supplémentaire = `v0.11.0`, pas `v0.9.4`). La v1 (comptes,
+stats persistantes, ELO, avatars, admin, anglais, iOS…) est hors scope de ce
+document.
 
 | Tag | Milestone | Contenu | Critère de sortie |
 |---|---|---|---|
@@ -18,7 +21,7 @@ anglais, iOS…) est hors scope de ce document.
 | **v0.6** | SFX | Sons embarqués : lancer de dés, gobelet, « Dudo ! », « Calza ! », révélation, dé perdu, élimination, victoire, notification de son tour ; réglage volume/muet (§4.3) | SFX audibles hors-ligne sur les moments clés |
 | **v0.7** | House rules — moteur | `internal/rules` : interface de hooks (validation d'enchère, décompte, perte de dé, conditions de manche) + métadonnées `nom`/`description`/`incompatibilités`/`ranked_safe` (§1.5) | Framework testé, zéro règle implémentée ne change rien au jeu |
 | **v0.8** | House rules — contenu | 5 règles implémentées (§1.5) : Dé public, Double Paco, Salsa, Calzone, Pacobye — toggles dans le panneau d'options + pills en jeu | Parties à règles perso jouables, dépendances/incompatibilités respectées |
-| **v0.9** | Structure & qualité | `prototype/` → `client/` + `shared/` (specs_techniques §3, §6) ; durcissement collision de jetons (§5, point ouvert) ; CI GitHub Actions : `go test`, `go vet`, `golangci-lint`, import headless Godot | Repo aligné sur l'architecture cible, CI verte |
+| **v0.9** | Structure & qualité | Découpé en sous-tags : `v0.9.0` = CI GitHub Actions (`go test`, `go vet`, `golangci-lint`, import headless Godot) ; `v0.9.1` = durcissement collision de jetons (§5, point ouvert) ; `v0.9.2` = `prototype/` → `client/` + `shared/` (specs_techniques §3, §6) | Repo aligné sur l'architecture cible, CI verte |
 | **v0.10** | Prod & playtest | Déploiement VPS : Caddy + systemd + `wss://` ; preset export Android ; playtest multi-appareils contre les indicateurs §9 (partie 4 joueurs sans bug bloquant, reconnexion, bots crédibles, 60 fps mid-range en 4G) | **Release beta publique** (Play Store, track beta) |
 
 Notes :

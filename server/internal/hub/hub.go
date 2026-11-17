@@ -113,7 +113,7 @@ func (h *Hub) writePump(c *conn) {
 
 func (h *Hub) readPump(ctx context.Context, c *conn) {
 	defer func() {
-		c.ws.Close(websocket.StatusNormalClosure, "bye")
+		_ = c.ws.Close(websocket.StatusNormalClosure, "bye")
 		close(c.done)
 	}()
 	// Premier message obligatoire : hello (token + pseudo).

@@ -108,10 +108,7 @@ func TestEndToEndGame(t *testing.T) {
 
 	// Attendre que le tour soit à alice (le bot joue tout seul s'il commence).
 	deadline := time.Now().Add(5 * time.Second)
-	for {
-		if view.YourSeat == view.Turn {
-			break
-		}
+	for view.YourSeat != view.Turn {
 		if time.Now().After(deadline) {
 			t.Fatal("le tour n'est jamais arrivé à alice")
 		}
