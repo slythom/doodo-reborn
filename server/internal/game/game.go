@@ -7,8 +7,12 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"doodo/internal/rules"
 )
 
+// Paco est la valeur spéciale des dés jokers — miroir de rules.Paco
+// (défini des deux côtés pour éviter un cycle d'imports).
 const Paco = 1
 
 var (
@@ -23,12 +27,14 @@ var (
 )
 
 // Options de table — sous-ensemble de §1.3 qui affecte les règles.
-// Les house rules (§1.5) s'ajouteront ici via des hooks, non en dur.
+// Les house rules (§1.5) s'activent par id via Rules et sont appliquées
+// par le moteur de hooks (internal/rules), non en dur.
 type Options struct {
-	DicePerPlayer   int  `json:"dice_per_player"` // 3-5, défaut 5
-	PacoJoker       bool `json:"paco_joker"`
-	CalzaEnabled    bool `json:"calza_enabled"`
-	PalificoEnabled bool `json:"palifico_enabled"`
+	DicePerPlayer   int      `json:"dice_per_player"` // 3-5, défaut 5
+	PacoJoker       bool     `json:"paco_joker"`
+	CalzaEnabled    bool     `json:"calza_enabled"`
+	PalificoEnabled bool     `json:"palifico_enabled"`
+	Rules           []string `json:"rules,omitempty"` // ids de règles perso (§1.5)
 }
 
 func DefaultOptions() Options {
@@ -38,6 +44,9 @@ func DefaultOptions() Options {
 func (o Options) Validate() error {
 	if o.DicePerPlayer < 3 || o.DicePerPlayer > 5 {
 		return fmt.Errorf("game: %d dés de départ hors de [3,5]", o.DicePerPlayer)
+	}
+	if _, err := rules.Resolve(o.Rules); err != nil {
+		return err
 	}
 	return nil
 }
@@ -54,6 +63,9 @@ func (b Bid) String() string {
 	}
 	return fmt.Sprintf("%d x %d", b.Quantity, b.Value)
 }
+
+// rbid convertit vers le type miroir exposé aux hooks de règles.
+func rbid(b Bid) rules.Bid { return rules.Bid{Quantity: b.Quantity, Value: b.Value} }
 
 type ActionType int
 
@@ -85,10 +97,10 @@ type Event struct {
 	Type    EventType `json:"type"`
 	Player  int       `json:"player"`
 	Bid     Bid       `json:"bid"`
-	Count   int       `json:"count"`   // EvReveal : décompte réel
-	Dice    [][]int   `json:"dice"`    // EvReveal : dés de chaque joueur (par siège)
-	Ranking []int     `json:"ranking"` // EvGameOver : classement du 1er au dernier
-	Calza   bool      `json:"calza,omitempty"` // EvReveal : provient d'un calza (vs dudo)
+	Count   int       `json:"count"`            // EvReveal : décompte réel
+	Dice    [][]int   `json:"dice"`             // EvReveal : dés de chaque joueur (par siège)
+	Ranking []int     `json:"ranking"`          // EvGameOver : classement du 1er au dernier
+	Calza   bool      `json:"calza,omitempty"`  // EvReveal : provient d'un calza (vs dudo)
 	Bidder  int       `json:"bidder,omitempty"` // EvReveal : siège de l'enchérisseur contesté
 }
 
@@ -119,6 +131,7 @@ type Game struct {
 	palificoUsed    map[int]bool // a déjà armé une palifico cette partie
 	elimOrder       []int        // ordre chronologique des éliminations
 	roll            func() int   // tirage d'un dé (1-6), injectable pour les tests
+	rules           *rules.Set   // règles perso actives — nil = jeu standard
 }
 
 // New crée une partie et lance la première manche. rng pilote les dés et le
@@ -133,6 +146,17 @@ func New(opts Options, ids []string, rng *rand.Rand) (*Game, error) {
 	if rng == nil {
 		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
+	set, err := rules.Resolve(opts.Rules)
+	if err != nil {
+		return nil, err
+	}
+	if err := set.CheckOptions(map[string]bool{
+		"paco_joker":       opts.PacoJoker,
+		"calza_enabled":    opts.CalzaEnabled,
+		"palifico_enabled": opts.PalificoEnabled,
+	}); err != nil {
+		return nil, err
+	}
 	g := &Game{
 		Opts:            opts,
 		Bidder:          -1,
@@ -140,6 +164,7 @@ func New(opts Options, ids []string, rng *rand.Rand) (*Game, error) {
 		palificoTrigger: map[int]bool{},
 		palificoUsed:    map[int]bool{},
 		roll:            func() int { return 1 + rng.Intn(6) },
+		rules:           set,
 	}
 	for _, id := range ids {
 		g.Players = append(g.Players, &Player{ID: id, DiceCount: opts.DicePerPlayer, Alive: true})
@@ -212,8 +237,13 @@ func (g *Game) Abandon(p int) []Event {
 }
 
 // LegalBid applique la règle §1.2 + les transitions paco + les contraintes
-// palifico (valeur figée, quantité croissante seule).
+// palifico (valeur figée, quantité croissante seule), puis laisse les
+// règles perso ajuster le verdict (§1.5 — nil-sûr sans règle active).
 func (g *Game) LegalBid(b Bid) bool {
+	return g.rules.FilterBid(g, rbid(b), g.legalBid(b))
+}
+
+func (g *Game) legalBid(b Bid) bool {
 	if b.Quantity < 1 || b.Value < Paco || b.Value > 6 {
 		return false
 	}
@@ -236,8 +266,13 @@ func (g *Game) LegalBid(b Bid) bool {
 	}
 }
 
-// MinBid est l'enchère minimale légale, utilisée par l'auto-action du timer.
+// MinBid est l'enchère minimale légale, utilisée par l'auto-action du
+// timer — ajustable par les règles perso (nil-sûr).
 func (g *Game) MinBid() Bid {
+	return Bid(g.rules.MinBid(g, rbid(g.minBid())))
+}
+
+func (g *Game) minBid() Bid {
 	if !g.HasBid {
 		if g.Palifico {
 			return Bid{Quantity: 1, Value: Paco}
@@ -279,10 +314,10 @@ func (g *Game) SetDice(seat int, dice []int) error {
 func (g *Game) count(v int) int {
 	jokers := g.Opts.PacoJoker && !g.Palifico && v != Paco
 	n := 0
-	for _, p := range g.Players {
+	for seat, p := range g.Players {
 		for _, d := range p.Dice {
 			if d == v || (jokers && d == Paco) {
-				n++
+				n += g.rules.Weight(g, seat, v, d) // 1 par défaut (nil-sûr)
 			}
 		}
 	}
@@ -318,11 +353,18 @@ func (g *Game) resolve(challenger int, calza bool) []Event {
 	}
 	evs := []Event{{Type: EvReveal, Player: challenger, Bid: g.Current, Count: count, Dice: dice, Calza: calza, Bidder: g.Bidder}}
 
+	// Contexte de résolution passé aux hooks de perte/gain de dé (§1.5).
+	res := rules.Resolution{
+		Challenger: challenger, Calza: calza,
+		Bid: rbid(g.Current), BidderSeat: g.Bidder, Count: count,
+	}
+
 	var starter int
 	if calza && count == g.Current.Quantity {
 		// Calza réussi : le calzeur regagne un dé (plafonné à son nombre de
 		// départ — §1.4 : au max, le calza ne fait que valider l'enchère).
-		if c := g.Players[challenger]; c.DiceCount < g.Opts.DicePerPlayer {
+		n := g.rules.DiceGained(res, challenger, 1)
+		for c := g.Players[challenger]; n > 0 && c.DiceCount < g.Opts.DicePerPlayer; n-- {
 			c.DiceCount++
 			evs = append(evs, Event{Type: EvDieGained, Player: challenger})
 		}
@@ -337,7 +379,9 @@ func (g *Game) resolve(challenger int, calza bool) []Event {
 		default:
 			loser = challenger // enchère tenue : le douteur perd
 		}
-		evs = append(evs, g.loseDie(loser)...)
+		for n := g.rules.DiceLost(res, loser, 1); n > 0 && g.Players[loser].Alive; n-- {
+			evs = append(evs, g.loseDie(loser, res)...)
+		}
 		if g.Players[loser].Alive {
 			starter = loser
 		} else {
@@ -352,12 +396,17 @@ func (g *Game) resolve(challenger int, calza bool) []Event {
 }
 
 // loseDie retire un dé au joueur p ; gère l'élimination et l'armement d'une
-// palifico quand il tombe à exactement 1 dé (§1.3).
-func (g *Game) loseDie(p int) []Event {
+// palifico quand il tombe à exactement 1 dé (§1.3). Une règle Survivor peut
+// empêcher l'élimination : le joueur repart alors avec 1 dé (§1.5).
+func (g *Game) loseDie(p int, res rules.Resolution) []Event {
 	pl := g.Players[p]
 	pl.DiceCount--
 	evs := []Event{{Type: EvDieLost, Player: p}}
 	if pl.DiceCount <= 0 {
+		if g.rules.Survives(res, p) {
+			pl.DiceCount = 1
+			return evs
+		}
 		pl.DiceCount = 0
 		pl.Alive = false
 		pl.Dice = nil
@@ -399,6 +448,18 @@ func (g *Game) startRound(starter int) []Event {
 		for i := range p.Dice {
 			p.Dice[i] = g.roll()
 		}
+	}
+	// Conditions de manche ajustables par les règles perso — appelées après
+	// le tirage pour que les hooks voient les nouveaux lancers (§1.5).
+	mod := g.rules.RoundStart(g)
+	if mod.SkipPalifico {
+		g.Palifico = false
+	}
+	if mod.ForcePalifico {
+		g.Palifico = true
+	}
+	if mod.Starter >= 0 && mod.Starter < len(g.Players) && g.Players[mod.Starter].Alive {
+		starter = mod.Starter
 	}
 	g.Turn = starter
 	if g.Palifico {

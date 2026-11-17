@@ -88,6 +88,7 @@ Le créateur de la partie choisit avant le lancement. Les options sont **figées
   - « Double Paco » — les Pacos comptent double dans le décompte
   - « Menteur puni » — un joueur surpris en bluff éhonté (enchère très surestimée) perd 2 dés
   - « Survivant » — un joueur à 1 dé éliminé sur un Calza réussi adverse repart avec 1 dé
+- Le moteur de hooks (v0.7, `internal/rules`) couvre cinq points d'extension : **validation d'enchère** (`BidFilter`, `MinBidder`), **décompte** (`Weighter`), **perte/gain de dé et élimination** (`DieLoser`, `DieGainer`, `Survivor`), **conditions de manche** (`Rounder`) et **visibilité des dés** (`Revealer`). Une règle n'implémente que les hooks dont elle a besoin ; aucune règle active = jeu strictement inchangé.
 - Le client affiche les règles actives en partie (icônes + infobulles / panneau « règles de la table »).
 
 ---
