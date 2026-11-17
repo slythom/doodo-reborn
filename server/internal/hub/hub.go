@@ -218,14 +218,41 @@ func (h *Hub) gameAction(c *conn, s *session, m protocol.ClientMsg) {
 
 func (h *Hub) hello(c *conn, m protocol.ClientMsg) *session {
 	token := m.Token
-	if token == "" {
-		token = newToken()
-	}
 	name := m.Name
 	if name == "" {
 		name = "invité"
 	}
+	// Durcissement des collisions de jetons (§5) : un jeton déjà associé
+	// à une conn vivante n'est pas volé — le nouvel arrivant (autre
+	// device, instance partageant la session.cfg) reçoit un jeton neuf.
+	// Une conn zombie (socket morte pas encore détectée, ping sans
+	// réponse) cède la place : c'est le cas normal de la reconnexion.
+	var zombie *conn
+	if token != "" {
+		h.mu.Lock()
+		old := h.conns[token]
+		h.mu.Unlock()
+		if old != nil && old != c {
+			if h.connAlive(old) {
+				token = newToken()
+			} else {
+				zombie = old
+			}
+		}
+	}
+	if token == "" {
+		token = newToken()
+	}
+
 	h.mu.Lock()
+	// La conn zombie a pu être remplacée pendant le ping : si le jeton
+	// est désormais occupé par une AUTRE conn, on ne la vole pas non plus.
+	if zombie != nil {
+		if cur := h.conns[token]; cur != nil && cur != zombie {
+			zombie = nil
+			token = newToken()
+		}
+	}
 	s := h.sessions[token]
 	if s == nil {
 		s = &session{token: token}
@@ -235,6 +262,11 @@ func (h *Hub) hello(c *conn, m protocol.ClientMsg) *session {
 	h.conns[token] = c
 	h.mu.Unlock()
 
+	// Prise de relais : la conn zombie est refermée APRÈS l'enregistrement
+	// de la nouvelle — la garde de onClose ignore alors sa fermeture.
+	if zombie != nil {
+		_ = zombie.ws.Close(websocket.StatusPolicyViolation, "session reprise")
+	}
 	// Reconnexion : si le membre existe encore dans une room, on le réintègre.
 	if s.room != nil && s.member != nil {
 		s.room.Reconnected(s.member)
@@ -242,6 +274,15 @@ func (h *Hub) hello(c *conn, m protocol.ClientMsg) *session {
 	h.deliver(c, protocol.Envelope{Type: "welcome", Data: protocol.Welcome{Token: token, Name: name}})
 	slog.Info("hello", "token", token[:8], "name", name, "rejoin", s.room != nil)
 	return s
+}
+
+// connAlive sonde la conn par un ping WS (2 s max) : réponse = conn
+// vivante ; échec ou timeout = socket zombie (morte sans que readPump
+// l'ait encore détecté — la détection TCP seule prend du temps).
+func (h *Hub) connAlive(c *conn) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return c.ws.Ping(ctx) == nil
 }
 
 func (h *Hub) createRoom(c *conn, s *session, m protocol.ClientMsg) {
@@ -315,11 +356,17 @@ func (h *Hub) leave(s *session) {
 }
 
 // onClose : la connexion tombe — grace period côté room (≠ leave volontaire).
+// Garde : si conns[token] pointe désormais sur une AUTRE conn (reprise de
+// session par un client reconnecté), cette fermeture n'y touche pas (§5).
 func (h *Hub) onClose(c *conn, s *session) {
 	if s == nil {
 		return
 	}
 	h.mu.Lock()
+	if h.conns[s.token] != c {
+		h.mu.Unlock()
+		return
+	}
 	delete(h.conns, s.token)
 	r := s.room
 	h.mu.Unlock()

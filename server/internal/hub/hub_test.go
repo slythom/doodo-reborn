@@ -377,3 +377,104 @@ func decodeView(t *testing.T, env protocol.Envelope) *protocol.View {
 	}
 	return &v
 }
+
+// Collision de jetons (§5) : un hello avec le jeton d'une conn VIVANTE
+// reçoit un jeton neuf au lieu de voler la session.
+func TestTokenCollisionLiveOwner(t *testing.T) {
+	h := New()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+	wsURL := "ws" + srv.URL[4:] + "/ws"
+
+	alice := dial(t, wsURL)
+	defer alice.ws.Close(websocket.StatusNormalClosure, "")
+	tokA := hello(t, alice, "alice")
+
+	// Bob arrive avec le MÊME jeton (autre device, session.cfg partagé).
+	bob := dial(t, wsURL)
+	defer bob.ws.Close(websocket.StatusNormalClosure, "")
+	bob.send(t, map[string]any{"type": "hello", "name": "bob", "token": tokA})
+	env := bob.recv(t, "welcome", 5*time.Second)
+	var w protocol.Welcome
+	raw, _ := json.Marshal(env.Data)
+	json.Unmarshal(raw, &w)
+	if w.Token == tokA {
+		t.Fatal("conn vivante : le nouvel arrivant doit recevoir un jeton neuf")
+	}
+
+	// Alice garde la main : sa session n'est pas volée.
+	alice.send(t, map[string]any{"type": "create"})
+	if v := decodeView(t, alice.recv(t, "room_state", 3*time.Second)); v.Code == "" {
+		t.Fatal("alice devrait pouvoir créer une salle")
+	}
+	// Bob est une identité distincte : sa propre salle aussi.
+	bob.send(t, map[string]any{"type": "create"})
+	if v := decodeView(t, bob.recv(t, "room_state", 3*time.Second)); v.Code == "" {
+		t.Fatal("bob devrait pouvoir créer une salle")
+	}
+}
+
+// Collision de jetons (§5) : un hello avec le jeton d'une conn ZOMBIE
+// (socket morte non détectée) reprend la session — cas normal de la
+// reconnexion après crash.
+func TestTokenCollisionZombieTakeover(t *testing.T) {
+	h := New()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+	wsURL := "ws" + srv.URL[4:] + "/ws"
+
+	alice := dial(t, wsURL)
+	tokA := hello(t, alice, "alice")
+	alice.send(t, map[string]any{"type": "create"})
+	code := decodeView(t, alice.recv(t, "room_state", 3*time.Second)).Code
+
+	// Simule une conn zombie : socket morte, mais le serveur croit encore
+	// la conn vivante (sa readPump n'a pas encore vu l'erreur).
+	dead := dial(t, wsURL)
+	dead.ws.CloseNow()
+	zombie := &conn{ws: dead.ws, send: make(chan []byte, 1), done: make(chan struct{})}
+	h.mu.Lock()
+	oldConn := h.conns[tokA]
+	h.conns[tokA] = zombie
+	h.mu.Unlock()
+
+	// Reconnexion avec le même jeton : le ping échoue → reprise normale.
+	// Le room_state de resync est émis pendant Reconnected, AVANT le
+	// welcome — on collecte les deux dans l'ordre d'arrivée.
+	carol := dial(t, wsURL)
+	defer carol.ws.Close(websocket.StatusNormalClosure, "")
+	carol.send(t, map[string]any{"type": "hello", "name": "alice", "token": tokA})
+	var w protocol.Welcome
+	gotState := false
+	deadline := time.After(5 * time.Second)
+	for w.Token == "" || !gotState {
+		select {
+		case env := <-carol.in:
+			switch env.Type {
+			case "welcome":
+				raw, _ := json.Marshal(env.Data)
+				json.Unmarshal(raw, &w)
+			case "room_state":
+				if decodeView(t, env).Code == code {
+					gotState = true
+				}
+			}
+		case <-deadline:
+			t.Fatalf("welcome=%+v room_state reçu=%v", w, gotState)
+		}
+	}
+	if w.Token != tokA {
+		t.Fatalf("zombie : le jeton devrait être repris tel quel, got %s", w.Token)
+	}
+
+	// Garde onClose : la mort tardive de la VRAIE conn de alice ne doit
+	// pas effacer l'entrée conns[tokA] qui appartient désormais à carol.
+	alice.ws.Close(websocket.StatusNormalClosure, "")
+	time.Sleep(300 * time.Millisecond)
+	h.mu.Lock()
+	cur := h.conns[tokA]
+	h.mu.Unlock()
+	if cur == nil || cur == oldConn {
+		t.Error("onClose a effacé l'entrée de la conn de relais")
+	}
+}
