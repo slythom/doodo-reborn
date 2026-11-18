@@ -246,7 +246,10 @@ static func option_button() -> OptionButton:
 	p.add_theme_color_override("font_disabled_color", DIM)
 	var ps := px(PANEL, EDGE, 8, 3, 6)
 	p.add_theme_stylebox_override("panel", ps)
-	p.add_theme_stylebox_override("hover", sb(Color("#D9F1FB"), BLUE, 4, 2))
+	# Survol d'item : fond assorti au thème — en sombre, un bleu nuit
+	# (le texte INK y est clair) sinon le bug #8 : clair sur clair.
+	var hover_bg := Color("#2B4A66") if dark else Color("#D9F1FB")
+	p.add_theme_stylebox_override("hover", sb(hover_bg, BLUE, 4, 2))
 	p.add_theme_constant_override("vseparation", 10)
 	return o
 
