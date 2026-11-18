@@ -407,7 +407,7 @@ func _build_ui() -> void:
 	lv.add_child(rgrid)
 	for t in RULES:
 		var id: String = t[1]
-		var tgl := _toggle_cell(rgrid, t[0])
+		var tgl := _toggle_cell(rgrid, t[0], t[2])
 		tgl.tooltip_text = t[2]
 		tgl.toggled.connect(func(on: bool) -> void: _patch_rule(id, on))
 		_rule_sw[id] = tgl
@@ -553,19 +553,60 @@ func _opt_row(parent: Control, label_text: String, items: Array) -> OptionButton
 	row.add_child(o)
 	return o
 
-# Cellule « libellé + interrupteur » des options booléennes.
-func _toggle_cell(parent: Control, label_text: String) -> UI.ThemeSwitch:
+# Cellule « libellé [+ badge i] + interrupteur » des options booléennes.
+# info non vide → badge « i » ouvrant la modale de description (issue #7).
+func _toggle_cell(parent: Control, label_text: String, info := "") -> UI.ThemeSwitch:
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 10)
 	parent.add_child(row)
 	var l := UI.label(label_text, 18, UI.INK, 700)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(l)
+	if info != "":
+		var ib := UI.info_btn()
+		ib.custom_minimum_size.y = 36
+		ib.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var title := label_text
+		var desc := info
+		ib.pressed.connect(func() -> void: _info_modal(title, desc))
+		row.add_child(ib)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(spacer)
 	var sw := UI.ThemeSwitch.new(false, false)
 	row.add_child(sw)
 	return sw
+
+# Modale de description d'une règle (issue #7) : scrim assombri + panneau
+# arcade centré, titre pixel + texte — tap sur le fond ou OK pour fermer.
+func _info_modal(title: String, desc: String) -> void:
+	var scrim := ColorRect.new()
+	scrim.color = Color(0, 0, 0, 0.45)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(scrim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE # laisse passer le tap-fond
+	scrim.add_child(cc)
+	var p := UI.panel()
+	p.custom_minimum_size.x = 420
+	cc.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 16)
+	p.add_child(v)
+	var t := UI.pix_label(title.to_upper(), 13, UI.BLUE)
+	v.add_child(t)
+	var d := UI.label(desc, 19, UI.INK, 600)
+	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(d)
+	var ok := UI.button("OK", "primary", true)
+	ok.pressed.connect(func() -> void: scrim.queue_free())
+	v.add_child(ok)
+	scrim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed:
+			scrim.queue_free())
+	UI.pop_in(p)
 
 # Envoie les options complètes avec un champ modifié — les clés du moteur
 # (§1.3) vivent sous options.game.

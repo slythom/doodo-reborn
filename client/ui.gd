@@ -296,6 +296,23 @@ static func pill(text: String, bg: Color, fg: Color, size := 20, wght := 800) ->
 static func player_chip(name: String, seat: int, size := 18) -> Label:
 	return pill(name, PLAYER[seat % PLAYER.size()] if seat >= 0 else DIM, Color.WHITE, size)
 
+# Badge « i » d'information : petit cercle bleu cliquable (les tooltips ne
+# fonctionnent pas au tactile — la description s'affiche en modale).
+static func info_btn() -> Button:
+	var b := Button.new()
+	b.text = "i"
+	b.add_theme_font_override("font", font_w(800, true)) # Fredoka — « i » rond
+	b.add_theme_font_size_override("font_size", 20)
+	b.custom_minimum_size = Vector2(36, 36)
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(c, Color.WHITE)
+	b.add_theme_stylebox_override("normal", sb(BLUE, BLUE_DK, 18, 2))
+	b.add_theme_stylebox_override("hover", sb(BLUE_HI, BLUE_DK, 18, 2))
+	b.add_theme_stylebox_override("pressed", sb(BLUE_DK, BLUE_DK, 18, 2))
+	b.add_theme_stylebox_override("focus", sb(BLUE, BLUE_DK, 18, 3))
+	_squish(b)
+	return b
+
 # Label pixel (titres/logo arcade) — Press Start 2P, chaînes ASCII.
 static func pix_label(text: String, size := 32, color: Color = INK) -> Label:
 	var l := Label.new()
