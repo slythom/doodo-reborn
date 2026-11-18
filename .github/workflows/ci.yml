@@ -13,8 +13,8 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -23,7 +23,7 @@ jobs:
       - name: Tests
         run: go test ./...
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           working-directory: server
@@ -32,7 +32,7 @@ jobs:
     name: Godot — import headless + parse
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         # Les .import sont ignorés (client/.gitignore) : la CI doit
         # régénérer les artefacts d'import, comme un clone frais.
       - name: Télécharger Godot 4.7.2 headless
