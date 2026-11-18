@@ -842,7 +842,7 @@ func (r *Room) viewForLocked(m *Member) *protocol.View {
 		v.Options.GodMode = false
 	}
 	for _, p := range r.players {
-		pv := protocol.PlayerView{Seat: -1, Name: p.Name, Bot: p.Bot, Connected: p.Connected}
+		pv := protocol.PlayerView{ID: p.ID, Seat: -1, Name: p.Name, Bot: p.Bot, Connected: p.Connected}
 		if r.seats != nil {
 			seat := r.seatOfLocked(p.ID)
 			pv.Seat = seat

@@ -478,3 +478,39 @@ func TestTokenCollisionZombieTakeover(t *testing.T) {
 		t.Error("onClose a effacé l'entrée de la conn de relais")
 	}
 }
+
+// Issue #5 : le client lit l'id du bot dans la vue et l'envoie à remove_bot.
+func TestRemoveBotEndToEnd(t *testing.T) {
+	h := New()
+	srv := httptest.NewServer(h.Handler())
+	defer srv.Close()
+	wsURL := "ws" + srv.URL[4:] + "/ws"
+
+	c := dial(t, wsURL)
+	defer c.ws.Close(websocket.StatusNormalClosure, "")
+	hello(t, c, "host")
+
+	c.send(t, map[string]any{"type": "create"})
+	c.recv(t, "room_state", 3*time.Second)
+
+	c.send(t, map[string]any{"type": "add_bot"})
+	env := c.recv(t, "room_state", 3*time.Second)
+	view := decodeView(t, env)
+
+	botID := ""
+	for _, p := range view.Players {
+		if p.Bot {
+			botID = p.ID
+		}
+	}
+	if botID == "" {
+		t.Fatalf("la vue n'expose pas l'id du bot: %+v", view.Players)
+	}
+
+	c.send(t, map[string]any{"type": "remove_bot", "target": botID})
+	env = c.recv(t, "room_state", 3*time.Second)
+	view = decodeView(t, env)
+	if len(view.Players) != 1 || view.Players[0].Bot {
+		t.Fatalf("bot toujours présent après remove_bot: %+v", view.Players)
+	}
+}

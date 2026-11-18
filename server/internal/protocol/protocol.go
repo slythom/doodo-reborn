@@ -115,6 +115,7 @@ type Notice struct {
 // ---- État de la salle (snapshot, specs §4 : complet à chaque changement) ----
 
 type PlayerView struct {
+	ID        string `json:"id"`   // id membre (token invité, bot:N) — sert aux cibles kick/remove_bot
 	Seat      int    `json:"seat"` // -1 tant que la partie n'a pas commencé
 	Name      string `json:"name"`
 	Bot       bool   `json:"bot"`

@@ -813,21 +813,39 @@ func _on_view(v: Dictionary) -> void:
 		c.queue_free()
 	for c in _bots_box.get_children():
 		c.queue_free()
+	var is_host: bool = v.get("host", "") == Net.token
 	var idx := 0
 	for p in UI.arr(v.get("players")):
 		var txt: String = p.get("name", "?")
-		if p.get("bot", false):
+		var is_bot: bool = p.get("bot", false)
+		if is_bot:
 			txt += "  (bot)"
 		if not p.get("connected", true):
 			txt += "  (déco)"
-		var cc := CenterContainer.new()
 		var chip := UI.player_chip(txt, int(p.get("seat", idx)), 20)
-		cc.add_child(chip)
-		# Les bots listés sous le bouton « Ajouter un bot », les humains en haut.
-		(_bots_box if p.get("bot", false) else _players_box).add_child(cc)
+		# Les bots listés sous le bouton « Ajouter un bot » : l'hôte peut les
+		# retirer via la croix accolée à la chip (issue #5, remove_bot serveur).
+		if is_bot:
+			var brow := HBoxContainer.new()
+			brow.alignment = BoxContainer.ALIGNMENT_CENTER
+			brow.add_theme_constant_override("separation", 8)
+			brow.add_child(chip)
+			# La croix n'a de sens qu'avec l'id membre du bot (absent des vues
+			# servies par un serveur antérieur à PlayerView.id).
+			var bot_id := String(p.get("id", ""))
+			if is_host and bot_id != "":
+				var x := UI.button("✕", "dudo")
+				x.custom_minimum_size = Vector2(40, 40)
+				x.add_theme_font_size_override("font_size", 16)
+				x.pressed.connect(func() -> void: Net.remove_bot(bot_id))
+				brow.add_child(x)
+			_bots_box.add_child(brow)
+		else:
+			var cc := CenterContainer.new()
+			cc.add_child(chip)
+			_players_box.add_child(cc)
 		UI.pop_in(chip, idx * 0.08)
 		idx += 1
-	var is_host: bool = v.get("host", "") == Net.token
 	_launch_btn.visible = is_host
 	# Ajout de bot réservé à l'hôte côté serveur (ErrNotHost sinon).
 	_bot_btn.visible = is_host
