@@ -25,6 +25,8 @@ var _opt_maxp: OptionButton
 var _opt_timer: OptionButton
 var _opt_sw := {} # clé d'option booléenne -> UI.ThemeSwitch
 var _rule_sw := {} # id de règle perso -> UI.ThemeSwitch
+var _cursor: UI.TriCursor  # marqueur « ▸ » suivant le focus (menu arcade)
+var _cur_t: Tween
 
 # Catalogue client des règles perso : [libellé, id, infobulle] (§1.5).
 const RULES := [
@@ -153,7 +155,8 @@ func _build_ui() -> void:
 	_home.add_theme_constant_override("separation", 20)
 	center.add_child(_home)
 
-	# Logo : DOODO Fredoka encadré de deux dés inclinés.
+	# Logo : DOODO en pixel font, ombre dure (borne d'arcade), encadré de
+	# deux dés pixel inclinés.
 	var logo := HBoxContainer.new()
 	logo.alignment = BoxContainer.ALIGNMENT_CENTER
 	logo.add_theme_constant_override("separation", 20)
@@ -161,9 +164,11 @@ func _build_ui() -> void:
 	var d1 := UI.DieIcon.new(3, 40)
 	d1.rotation_degrees = -9
 	logo.add_child(d1)
-	var title := UI.label("DOODO", 76, UI.BLUE, 700, true)
-	title.add_theme_color_override("font_shadow_color", Color(UI.BLUE_DK, 0.35))
+	var title := UI.pix_label("DOODO", 52, UI.BLUE)
+	title.add_theme_color_override("font_shadow_color", UI.BLUE_DK)
+	title.add_theme_constant_override("shadow_offset_x", 4)
 	title.add_theme_constant_override("shadow_offset_y", 5)
+	title.add_theme_constant_override("shadow_outline_size", 0)
 	title.resized.connect(func() -> void: title.pivot_offset = title.size / 2.0)
 	logo.add_child(title)
 	var d2 := UI.DieIcon.new(5, 40)
@@ -178,7 +183,9 @@ func _build_ui() -> void:
 	wob.parallel().tween_property(title, "rotation_degrees", 0.0, 1.4).set_trans(Tween.TRANS_SINE)
 
 	var subc := CenterContainer.new()
-	subc.add_child(UI.pill("PERUDO EN LIGNE", Color("#D9F1FB"), UI.BLUE_DK, 15))
+	var tag := UI.pill("PERUDO EN LIGNE", Color("#D9F1FB"), UI.BLUE_DK, 11)
+	tag.add_theme_font_override("font", UI.font_pix())
+	subc.add_child(tag)
 	_home.add_child(subc)
 
 	# Carte centrale : formulaire dans un panneau blanc à ombre portée.
@@ -193,18 +200,19 @@ func _build_ui() -> void:
 	cv.add_theme_constant_override("separation", 14)
 	_home_card.add_child(cv)
 
-	_name_edit = _line_edit("Ton pseudo", 0)
+	_name_edit = _line_edit("Ton pseudo", 16)
+	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cv.add_child(_name_edit)
 
-	var create_btn := UI.button("Créer une table", "primary")
+	var create_btn := UI.button("CRÉER UNE TABLE", "primary", true)
 	create_btn.pressed.connect(func() -> void: _connect("create"))
 	cv.add_child(create_btn)
 
-	var quick_btn := UI.button("Partie rapide", "btn")
+	var quick_btn := UI.button("PARTIE RAPIDE", "btn", true)
 	quick_btn.pressed.connect(func() -> void: _connect("quick"))
 	cv.add_child(quick_btn)
 
-	var browse_btn := UI.button("Voir le lobby", "btn")
+	var browse_btn := UI.button("VOIR LE LOBBY", "btn", true)
 	browse_btn.pressed.connect(_open_browse)
 	cv.add_child(browse_btn)
 
@@ -228,14 +236,25 @@ func _build_ui() -> void:
 
 	_code_edit = _line_edit("CODE", 6)
 	_code_edit.custom_minimum_size.x = 170
+	_code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# Le code de salle en pixel font : lettres ASCII, rendu « écran de borne ».
+	_code_edit.add_theme_font_override("font", UI.font_pix())
+	_code_edit.add_theme_font_size_override("font_size", 20)
 	join_row.add_child(_code_edit)
 
-	var join_btn := UI.button("Rejoindre", "btn")
+	var join_btn := UI.button("REJOINDRE", "btn", true)
 	join_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	join_btn.pressed.connect(func() -> void:
 		_pending_code = _code_edit.text.strip_edges().to_upper()
 		_connect("join"))
 	join_row.add_child(join_btn)
+
+	# Accroche clignotante façon borne (« INSERT COIN » détourné).
+	var insc := CenterContainer.new()
+	var ins := UI.pix_label("- INSERT DE -", 11, UI.DIM)
+	insc.add_child(ins)
+	_home.add_child(insc)
+	UI.blink(ins)
 
 	_status = UI.label("", 18, UI.RED_DK)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -314,7 +333,7 @@ func _build_ui() -> void:
 	_room_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lv.add_child(_room_lbl)
 
-	_code_lbl = UI.label("", 46, UI.BLUE, 700, true)
+	_code_lbl = UI.pix_label("", 34, UI.BLUE)
 	_code_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lv.add_child(_code_lbl)
 
@@ -351,7 +370,7 @@ func _build_ui() -> void:
 	# Options de la table (§1.3/§4.1) : modifiables par l'hôte jusqu'au
 	# lancement, lecture seule pour les invités. Chaque changement renvoie
 	# l'intégralité des options — le serveur diffuse l'état canonique.
-	var opts_hdr := UI.label("Options de la table", 15, UI.DIM, 800)
+	var opts_hdr := UI.pix_label("OPTIONS", 10, UI.DIM)
 	opts_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lv.add_child(opts_hdr)
 	_opt_dice = _opt_row(lv, "Dés de départ", [["3", 3], ["4", 4], ["5", 5]])
@@ -379,7 +398,7 @@ func _build_ui() -> void:
 	# Règles perso (§1.5, v0.8) : ids dans options.game.rules. Les
 	# dépendances (Double Paco → Paco joker, Calzone → Calza) sont gérées
 	# par _patch_opt/_patch_rule en un seul set_options atomique.
-	var rules_hdr := UI.label("Règles perso", 15, UI.DIM, 800)
+	var rules_hdr := UI.pix_label("REGLES PERSO", 10, UI.DIM)
 	rules_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lv.add_child(rules_hdr)
 	var rgrid := GridContainer.new()
@@ -393,7 +412,7 @@ func _build_ui() -> void:
 		tgl.toggled.connect(func(on: bool) -> void: _patch_rule(id, on))
 		_rule_sw[id] = tgl
 
-	_bot_btn = UI.button("Ajouter un bot", "btn")
+	_bot_btn = UI.button("+ BOT", "btn", true)
 	_bot_btn.pressed.connect(func() -> void: Net.add_bot())
 	lv.add_child(_bot_btn)
 
@@ -404,7 +423,7 @@ func _build_ui() -> void:
 
 	# Chat de salle d'attente : texte libre tant que la partie n'est pas
 	# lancée (§4.3) — en jeu, seuls les messages prédéfinis passent.
-	var chat_hdr := UI.label("Chat", 15, UI.DIM, 800)
+	var chat_hdr := UI.pix_label("CHAT", 10, UI.DIM)
 	chat_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lv.add_child(chat_hdr)
 	_chat_scroll = ScrollContainer.new()
@@ -418,12 +437,10 @@ func _build_ui() -> void:
 	var chat_row := HBoxContainer.new()
 	chat_row.add_theme_constant_override("separation", 8)
 	lv.add_child(chat_row)
-	_chat_edit = LineEdit.new()
-	_chat_edit.placeholder_text = "Message…"
-	_chat_edit.max_length = 200
+	_chat_edit = _line_edit("Message…", 200)
 	_chat_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	chat_row.add_child(_chat_edit)
-	var chat_send := UI.button("Envoyer", "btn")
+	var chat_send := UI.button("OK", "btn", true)
 	chat_row.add_child(chat_send)
 	var send_chat := func() -> void:
 		var t := _chat_edit.text.strip_edges()
@@ -433,11 +450,11 @@ func _build_ui() -> void:
 	chat_send.pressed.connect(send_chat)
 	_chat_edit.text_submitted.connect(func(_t: String) -> void: send_chat.call())
 
-	_launch_btn = UI.button("Lancer la partie", "primary")
+	_launch_btn = UI.button("LANCER LA PARTIE", "primary", true)
 	_launch_btn.pressed.connect(func() -> void: Net.launch())
 	lv.add_child(_launch_btn)
 
-	_leave_btn = UI.button("Quitter la salle", "btn")
+	_leave_btn = UI.button("QUITTER", "btn", true)
 	_leave_btn.custom_minimum_size.y = 44
 	_leave_btn.add_theme_font_size_override("font_size", 18)
 	_leave_btn.pressed.connect(func() -> void:
@@ -470,7 +487,7 @@ func _build_ui() -> void:
 	bv.add_theme_constant_override("separation", 12)
 	_browse_card.add_child(bv)
 
-	var btitle := UI.label("Tables publiques", 24, UI.BLUE, 700, true)
+	var btitle := UI.pix_label("TABLES PUBLIQUES", 16, UI.BLUE)
 	btitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bv.add_child(btitle)
 
@@ -480,7 +497,7 @@ func _build_ui() -> void:
 	tabs.add_theme_constant_override("separation", 8)
 	bv.add_child(tabs)
 	for t in [["lobby", "En attente"], ["playing", "En cours"]]:
-		var tb := UI.button(t[1], "btn")
+		var tb := UI.button(t[1].to_upper(), "btn", true)
 		tb.custom_minimum_size = Vector2(0, 46)
 		tb.toggle_mode = true
 		var tid: String = t[0]
@@ -500,11 +517,19 @@ func _build_ui() -> void:
 	_browse_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bv.add_child(_browse_status)
 
-	var back_btn := UI.button("Retour", "btn")
+	var back_btn := UI.button("RETOUR", "btn", true)
 	back_btn.pressed.connect(func() -> void:
 		_browse.visible = false
 		_home.visible = true)
 	bv.add_child(back_btn)
+
+	# --- Finitions borne d'arcade : curseur de sélection + scanlines ---
+	_cursor = UI.TriCursor.new()
+	_cursor.visible = false
+	add_child(_cursor)
+	if not get_viewport().gui_focus_changed.is_connected(_move_cursor):
+		get_viewport().gui_focus_changed.connect(_move_cursor)
+	add_child(UI.Scanlines.new()) # balayage CRT — toujours au-dessus
 
 # Ligne « libellé + liste déroulante » des options de table — valeurs en
 # metadata d'item, comme le sélecteur de décor.
@@ -596,7 +621,8 @@ func _sync_opt(o: OptionButton, meta_val: Variant) -> void:
 		if cur:
 			o.select(i)
 
-# Champ de saisie Wii : blanc, bord clair, focus bleu + halo.
+# Champ de saisie « écran de borne » : bordure épaisse + ombre dure,
+# focus bleu — même signature que les boutons.
 func _line_edit(placeholder: String, maxlen: int) -> LineEdit:
 	var e := LineEdit.new()
 	e.placeholder_text = placeholder
@@ -606,8 +632,9 @@ func _line_edit(placeholder: String, maxlen: int) -> LineEdit:
 	e.add_theme_font_size_override("font_size", 26)
 	e.add_theme_color_override("font_color", UI.INK)
 	e.add_theme_color_override("font_placeholder_color", UI.DIM)
-	e.add_theme_stylebox_override("normal", UI.sb(UI.PANEL, UI.EDGE, 18, 2))
-	e.add_theme_stylebox_override("focus", UI.sb(UI.PANEL, UI.BLUE, 18, 2))
+	e.add_theme_color_override("caret_color", UI.BLUE)
+	e.add_theme_stylebox_override("normal", UI.px(UI.PANEL, UI.EDGE, 8, 3, 5))
+	e.add_theme_stylebox_override("focus", UI.px(UI.PANEL, UI.BLUE, 8, 3, 5))
 	return e
 
 # Reconstruit l'écran après bascule de thème (les styles sont cuits à la
@@ -622,6 +649,24 @@ func _rebuild() -> void:
 	_code_edit.text = code
 	if Net.view.get("state") == "lobby":
 		_on_view(Net.view)
+
+# Curseur de menu arcade : glisse vers le contrôle qui prend le focus
+# (clavier/manette) — signal viewport, ça couvre aussi les contrôles
+# créés après coup (lignes du lobby public…).
+func _move_cursor(c: Control) -> void:
+	if not is_instance_valid(c) or not c.is_visible_in_tree():
+		_cursor.visible = false
+		return
+	var gp := c.get_global_rect()
+	var tgt := gp.position + Vector2(-34, gp.size.y / 2.0 - 13)
+	if not _cursor.visible:
+		_cursor.position = tgt # placement instantané au premier focus
+	_cursor.visible = true
+	if _cur_t:
+		_cur_t.kill()
+	_cur_t = _cursor.create_tween() # lié au curseur : meurt avec lui (rebuild)
+	_cur_t.tween_property(_cursor, "position", tgt, 0.12) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _set_status(t: String, col := UI.RED_DK) -> void:
 	_status.text = t
@@ -694,7 +739,7 @@ func _browse_row(r: Dictionary) -> Control:
 		int(gopts.get("dice_per_player", 5)), timer_txt]
 	info.add_child(UI.label(det, 14, UI.DIM, 700))
 	var playing: bool = r.get("state") == "playing"
-	var jb := UI.button("Regarder" if playing else "Rejoindre", "btn")
+	var jb := UI.button("REGARDER" if playing else "REJOINDRE", "btn", true)
 	jb.custom_minimum_size = Vector2(130, 52)
 	jb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var code := String(r.get("code", ""))

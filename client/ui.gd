@@ -95,8 +95,10 @@ static func sfx_db() -> float:
 
 const FONT_UI := "res://assets/fonts/Nunito.ttf"
 const FONT_DISP := "res://assets/fonts/Fredoka.ttf"
+const FONT_PIX := "res://assets/fonts/PressStart2P.ttf" # titres arcade (OFL)
 static var _f_ui: Font
 static var _f_disp: Font
+static var _f_pix: Font
 
 static func font() -> Font:
 	if _f_ui == null:
@@ -107,6 +109,13 @@ static func font_disp() -> Font:
 	if _f_disp == null:
 		_f_disp = load(FONT_DISP)
 	return _f_disp
+
+# Police pixel « borne d'arcade » — titres, logo, tags. ASCII/Latin-1
+# seulement : réserver aux chaînes sans glyphes exotiques.
+static func font_pix() -> Font:
+	if _f_pix == null:
+		_f_pix = load(FONT_PIX)
+	return _f_pix
 
 # FontVariation à un poids donné (fonts variables, axe wght).
 static func font_w(wght: int, disp := false) -> FontVariation:
@@ -135,45 +144,62 @@ static func sb(bg: Color, border: Color = EDGE, radius := 18, bw := 1, bevel := 
 		s.shadow_offset = Vector2(0, bevel)
 	return s
 
+# StyleBox « borne d'arcade » : bordure épaisse + ombre DURE décalée vers le
+# bas (shadow_size=1 → réplique nette, pas de flou). Le volume d'un sprite,
+# pas le biseau « soft plastic » — c'est la signature retro du menu.
+static func px(bg: Color, border: Color, radius := 8, bw := 3, shadow := 6.0) -> StyleBoxFlat:
+	var s := sb(bg, border, radius, bw)
+	if shadow > 0:
+		s.shadow_color = SHADOW
+		s.shadow_size = 1
+		s.shadow_offset = Vector2(0, shadow)
+	return s
+
 static func _btn_colors(b: Button, c: Color) -> void:
 	b.add_theme_color_override("font_color", c)
 	b.add_theme_color_override("font_hover_color", c)
 	b.add_theme_color_override("font_pressed_color", c.darkened(0.15))
 	b.add_theme_color_override("font_disabled_color", Color(c, 0.5))
 
-# Bouton Wii par variante : primary (bleu), btn (blanc), dudo (rouge), calza (vert).
-static func button(text: String, kind := "btn") -> Button:
+# Bouton par variante : primary (bleu), btn (blanc), dudo (rouge),
+# calza (vert). pix=true → libellé en pixel font (menus arcade —
+# réservé aux chaînes courtes, la police est très large).
+static func button(text: String, kind := "btn", pix := false) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.add_theme_font_override("font", font_w(800))
-	b.add_theme_font_size_override("font_size", 26)
+	if pix:
+		b.add_theme_font_override("font", font_pix())
+		b.add_theme_font_size_override("font_size", 15)
+	else:
+		b.add_theme_font_override("font", font_w(800))
+		b.add_theme_font_size_override("font_size", 26)
 	var n: StyleBoxFlat
 	match kind:
 		"primary":
-			n = sb(BLUE, BLUE_DK, 18, 0, 3)
+			n = px(BLUE, BLUE_DK)
 			_btn_colors(b, Color.WHITE)
 			b.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.85))
-			b.add_theme_stylebox_override("hover", sb(BLUE_HI, BLUE_DK, 18, 0, 3))
-			b.add_theme_stylebox_override("pressed", sb(BLUE_DK, BLUE_DK, 18, 0, 1))
+			b.add_theme_stylebox_override("hover", px(BLUE_HI, BLUE_DK))
+			b.add_theme_stylebox_override("pressed", px(BLUE_DK, BLUE_DK, 8, 3, 1))
 		"dudo":
-			n = sb(RED, RED_DK, 18, 0, 3)
+			n = px(RED, RED_DK)
 			_btn_colors(b, Color.WHITE)
 			b.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.85))
-			b.add_theme_stylebox_override("hover", sb(RED.lightened(0.08), RED_DK, 18, 0, 3))
-			b.add_theme_stylebox_override("pressed", sb(RED_DK, RED_DK, 18, 0, 1))
+			b.add_theme_stylebox_override("hover", px(RED.lightened(0.08), RED_DK))
+			b.add_theme_stylebox_override("pressed", px(RED_DK, RED_DK, 8, 3, 1))
 		"calza":
-			n = sb(GREEN, GREEN_DK, 18, 0, 3)
+			n = px(GREEN, GREEN_DK)
 			_btn_colors(b, Color.WHITE)
 			b.add_theme_color_override("font_disabled_color", Color(1, 1, 1, 0.85))
-			b.add_theme_stylebox_override("hover", sb(GREEN.lightened(0.08), GREEN_DK, 18, 0, 3))
-			b.add_theme_stylebox_override("pressed", sb(GREEN_DK, GREEN_DK, 18, 0, 1))
+			b.add_theme_stylebox_override("hover", px(GREEN.lightened(0.08), GREEN_DK))
+			b.add_theme_stylebox_override("pressed", px(GREEN_DK, GREEN_DK, 8, 3, 1))
 		_: # btn neutre (blanc en clair, ardoise en sombre)
-			n = sb(PANEL, EDGE, 18, 1, 3)
+			n = px(PANEL, EDGE)
 			_btn_colors(b, INK)
-			b.add_theme_stylebox_override("hover", sb(PANEL, BLUE, 18, 2, 3))
-			b.add_theme_stylebox_override("pressed", sb(EDGE, EDGE, 18, 1, 1))
+			b.add_theme_stylebox_override("hover", px(PANEL, BLUE))
+			b.add_theme_stylebox_override("pressed", px(EDGE, EDGE, 8, 3, 1))
 	b.add_theme_stylebox_override("normal", n)
-	var dis := sb(Color(n.bg_color, 0.5), n.border_color, 18, n.get_border_width_min(), 3)
+	var dis := px(Color(n.bg_color, 0.5), n.border_color, 8, n.get_border_width_min())
 	b.add_theme_stylebox_override("disabled", dis)
 	b.custom_minimum_size = Vector2(0, 56)
 	# Focus visible pour la navigation clavier/manette : même style que hover.
@@ -199,13 +225,13 @@ static func option_button() -> OptionButton:
 			"font_hover_pressed_color", "font_focus_color"]:
 		o.add_theme_color_override(c, INK)
 	o.add_theme_color_override("font_disabled_color", Color(INK, 0.5))
-	o.add_theme_stylebox_override("normal", sb(PANEL, EDGE, 14, 2))
-	o.add_theme_stylebox_override("disabled", sb(PANEL, EDGE, 14, 2))
+	o.add_theme_stylebox_override("normal", px(PANEL, EDGE, 8, 3, 5))
+	o.add_theme_stylebox_override("disabled", px(PANEL, EDGE, 8, 3, 5))
 	for s in ["hover", "pressed"]:
-		o.add_theme_stylebox_override(s, sb(PANEL, BLUE, 14, 2))
+		o.add_theme_stylebox_override(s, px(PANEL, BLUE, 8, 3, 5))
 	# Focus manette : anneau plus épais, fond transparent — le stylebox focus
 	# se dessine PAR-DESSUS l'état, un fond opaque masquerait le survol.
-	o.add_theme_stylebox_override("focus", sb(Color(0, 0, 0, 0), BLUE, 14, 3))
+	o.add_theme_stylebox_override("focus", sb(Color(0, 0, 0, 0), BLUE, 8, 3))
 	# Flèche du thème par défaut : pensée pour fond sombre → teinte encre.
 	for c in ["icon_normal_color", "icon_hover_color", "icon_pressed_color",
 			"icon_hover_pressed_color", "icon_focus_color"]:
@@ -218,12 +244,9 @@ static func option_button() -> OptionButton:
 	p.add_theme_color_override("font_color", INK)
 	p.add_theme_color_override("font_hover_color", INK)
 	p.add_theme_color_override("font_disabled_color", DIM)
-	var ps := sb(PANEL, EDGE, 14, 1)
-	ps.shadow_color = SHADOW
-	ps.shadow_size = 10
-	ps.shadow_offset = Vector2(0, 4)
+	var ps := px(PANEL, EDGE, 8, 3, 6)
 	p.add_theme_stylebox_override("panel", ps)
-	p.add_theme_stylebox_override("hover", sb(Color("#D9F1FB"), BLUE, 8, 1))
+	p.add_theme_stylebox_override("hover", sb(Color("#D9F1FB"), BLUE, 4, 2))
 	p.add_theme_constant_override("vseparation", 10)
 	return o
 
@@ -257,20 +280,30 @@ static func punch(c: Control, power := 0.18) -> void:
 	t.tween_property(c, "scale", Vector2.ONE * (1.0 + power), 0.08)
 	t.tween_property(c, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
-# Pill de label (badges, chips joueur, toasts).
+# Pill de label (badges, chips joueur, toasts) — bordure marquée façon
+# sprite : radius réduit + liseré de la teinte assombrie du fond.
 static func pill(text: String, bg: Color, fg: Color, size := 20, wght := 800) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_override("font", font_w(wght))
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", fg)
-	l.add_theme_stylebox_override("normal", sb(bg, bg, 20, 0))
+	l.add_theme_stylebox_override("normal", sb(bg, bg.darkened(0.25), 8, 2))
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
 
 # Chip joueur à la couleur Wii de son siège (pseudo blanc).
 static func player_chip(name: String, seat: int, size := 18) -> Label:
 	return pill(name, PLAYER[seat % PLAYER.size()] if seat >= 0 else DIM, Color.WHITE, size)
+
+# Label pixel (titres/logo arcade) — Press Start 2P, chaînes ASCII.
+static func pix_label(text: String, size := 32, color: Color = INK) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", font_pix())
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
+	return l
 
 # disp=true → Fredoka (titres/badges/chiffres), sinon Nunito.
 static func label(text: String, size := 22, color: Color = INK, wght := 600, disp := false) -> Label:
@@ -281,14 +314,10 @@ static func label(text: String, size := 22, color: Color = INK, wght := 600, dis
 	l.add_theme_color_override("font_color", color)
 	return l
 
-# Panneau : bordure claire + vraie ombre portée (thémé : blanc ou ardoise).
+# Panneau « écran de borne » : bordure épaisse + ombre dure décalée.
 static func panel() -> PanelContainer:
 	var p := PanelContainer.new()
-	var s := sb(PANEL, EDGE, 20, 1)
-	s.shadow_color = SHADOW
-	s.shadow_size = 10
-	s.shadow_offset = Vector2(0, 4)
-	p.add_theme_stylebox_override("panel", s)
+	p.add_theme_stylebox_override("panel", px(PANEL, EDGE, 10, 3, 7))
 	return p
 
 # Messages prédéfinis du chat en partie (§4.3) — le serveur whitelist les
@@ -406,14 +435,14 @@ class DieIcon:
 		var sbx := StyleBoxFlat.new()
 		sbx.bg_color = face_col
 		sbx.border_color = edge_col
-		sbx.set_border_width_all(1)
-		sbx.set_corner_radius_all(int(size_px * 0.22))
+		sbx.set_border_width_all(2)
+		sbx.set_corner_radius_all(int(size_px * 0.14))
 		sbx.shadow_color = edge_col.darkened(0.2)
 		sbx.shadow_size = 1
 		sbx.shadow_offset = Vector2(0, 3)
 		sbx.draw(get_canvas_item(), r)
 		# Volume « plastique » : reflet frais en haut, ombre douce en bas.
-		var face_r := int(size_px * 0.22)
+		var face_r := int(size_px * 0.14)
 		var sheen := StyleBoxFlat.new()
 		sheen.bg_color = Color(1, 1, 1, 0.30) if glow else Color(0.84, 0.92, 0.97, 0.5)
 		sheen.corner_radius_top_left = face_r
@@ -424,7 +453,8 @@ class DieIcon:
 		shade.corner_radius_bottom_left = face_r
 		shade.corner_radius_bottom_right = face_r
 		shade.draw(get_canvas_item(), Rect2(1.5, size_px * 0.60, size_px - 3, size_px * 0.40 - 1.5))
-		var pip_r := size_px * 0.085
+		# Pips carrés : la signature pixel de la direction « borne d'arcade ».
+		var pip_s := size_px * 0.15
 		var q := size_px / 4.0
 		var pos := {
 			1: [Vector2(2, 2) * q],
@@ -435,7 +465,8 @@ class DieIcon:
 			6: [Vector2(1, 1) * q, Vector2(3, 1) * q, Vector2(1, 2) * q, Vector2(3, 2) * q, Vector2(1, 3) * q, Vector2(3, 3) * q],
 		}
 		for p in pos.get(clampi(value, 1, 6), pos[1]):
-			draw_circle(p, pip_r, pip_col)
+			draw_rect(Rect2(p - Vector2(pip_s / 2.0, pip_s / 2.0),
+				Vector2(pip_s, pip_s)), pip_col)
 
 # ---- ItemIcon : chip de projectile pour le sélecteur d'objets à lancer ----
 # Glyphes dessinés : les fonts embarquées n'ont pas d'emoji et une fallback
@@ -599,18 +630,23 @@ class ThemeSwitch:
 			queue_redraw()
 
 	func _draw() -> void:
-		# Rail : ardoise nuit quand actif, gris-bleu quand inactif.
-		var track := UI.sb(Color("#26324A") if on else Color("#C7D3E2"), Color(0, 0, 0, 0), int(H / 2), 0)
+		# Rail : ardoise nuit quand actif, gris-bleu quand inactif — profil
+		# carré-biseauté (radius faible + bordure), façon sprite.
+		var tr_col := Color("#26324A") if on else Color("#C7D3E2")
+		var track := UI.px(tr_col, tr_col.darkened(0.35), 6, 2, 0)
 		track.draw(get_canvas_item(), Rect2(Vector2.ZERO, Vector2(W, H)))
 		if has_focus():
-			var fr := UI.sb(Color(0, 0, 0, 0), UI.BLUE, int(H / 2), 3)
+			var fr := UI.sb(Color(0, 0, 0, 0), UI.BLUE, 6, 3)
 			fr.draw(get_canvas_item(), Rect2(Vector2.ZERO, Vector2(W, H)).grow(3))
-		# Knob blanc glissant, avec icône optionnelle.
-		var kr := H / 2.0 - 5.0
-		var kc := Vector2(lerpf(kr + 5.0, W - kr - 5.0, _kx), H / 2.0)
-		draw_circle(kc + Vector2(0, 2), kr, Color(0, 0, 0, 0.18))
-		draw_circle(kc, kr, Color.WHITE)
-		draw_arc(kc, kr - 1.0, 0.0, TAU, 40, UI.EDGE_DK, 1.5, true)
+		# Knob carré glissant, avec icône optionnelle.
+		var kr := H / 2.0 - 6.0
+		var kc := Vector2(lerpf(kr + 6.0, W - kr - 6.0, _kx), H / 2.0)
+		var krect := Rect2(kc - Vector2(kr, kr), Vector2(kr * 2, kr * 2))
+		var knob := UI.sb(Color.WHITE, UI.EDGE_DK, 5, 2)
+		knob.shadow_color = Color(0, 0, 0, 0.2)
+		knob.shadow_size = 1
+		knob.shadow_offset = Vector2(0, 2)
+		knob.draw(get_canvas_item(), krect)
 		if labels:
 			var f := UI.font()
 			var txt := "ON" if on else "OFF"
@@ -632,3 +668,50 @@ class ThemeSwitch:
 			for i in 8:
 				var dir := Vector2.from_angle(i * PI / 4.0)
 				draw_line(kc + dir * kr * 0.55, kc + dir * kr * 0.8, sc, 2.5, true)
+
+# ---- Scanlines : balayage CRT discret en overlay plein écran ----
+# Lignes horizontales fines à très faible opacité — l'effet borne d'arcade
+# sans gêner la lisibilité. À ajouter EN DERNIER (au-dessus de tout).
+class Scanlines:
+	extends Control
+	var step := 5.0
+	var col: Color
+
+	func _init() -> void:
+		col = Color(0, 0, 0, 0.045) if UI.dark else Color(0, 0, 0, 0.035)
+		set_anchors_preset(Control.PRESET_FULL_RECT)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var y := 0.0
+		while y < size.y:
+			draw_line(Vector2(0, y), Vector2(size.x, y), col, 1.0)
+			y += step
+
+# Clignotement « borne » : le contrôle pulse en alpha, en boucle. Bindé au
+# nœud — le tween meurt avec lui (rebuilds de thème).
+static func blink(c: Control, period := 0.55, lo := 0.15) -> void:
+	var t := c.create_tween().set_loops()
+	t.tween_property(c, "modulate:a", lo, period).set_trans(Tween.TRANS_SINE)
+	t.tween_property(c, "modulate:a", 1.0, period).set_trans(Tween.TRANS_SINE)
+
+# ---- TriCursor : marqueur de sélection « ▸ » des menus arcade ----
+# Suit le focus entre les contrôles (connecter gui_focus_changed).
+class TriCursor:
+	extends Control
+	var col := UI.AMBER
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(26, 26)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var s := size
+		var pts := PackedVector2Array([Vector2(0, 0), Vector2(s.x, s.y / 2.0),
+			Vector2(0, s.y)])
+		# Ombre dure décalée, même langage que les boutons.
+		var sh := PackedVector2Array()
+		for p in pts:
+			sh.append(p + Vector2(0, 2))
+		draw_colored_polygon(sh, Color(0, 0, 0, 0.25))
+		draw_colored_polygon(pts, col)

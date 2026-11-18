@@ -590,11 +590,13 @@ func _update_actions() -> void:
 		_set_status("%s choisit sa victime…" % _player_name(steal_pending))
 	action_bar.visible = not spectator and not view.get("over", false) and steal_pending < 0
 	if spectator:
-		steal_panel.visible = false
+		if steal_panel:
+			steal_panel.visible = false
 		return
 	if must_steal:
 		_build_steal_picker()
-	steal_panel.visible = must_steal
+	if steal_panel: # pas encore construit au premier appel (_set_face dans _hud)
+		steal_panel.visible = must_steal
 	if steal_pending >= 0:
 		return
 	var my_turn: bool = view.get("turn", -1) == view.get("your_seat", -2) and not view.get("over", false)

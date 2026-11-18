@@ -69,7 +69,9 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 
 ## 7. Charte UI / HUD (2D)
 
-*But : une UI « Wii Sports » — claire, joyeuse, tactile — qui prolonge naturellement le cartoon/Mii de la scène 3D. Référence : menus Wii (fonds ivoire, boutons « soft plastic », couleurs joueur). **Portrait uniquement** — pas de layout paysage.*
+*But : une UI « borne d'arcade » joyeuse — chunky, tactile, lisible — qui prolonge le cartoon/Mii de la scène 3D sans austérité de formulaire (issue #9 : direction « retro gaming » actée en v0.9.3). Palette Wii conservée (ivoire, bleu, couleurs joueur) ; **portrait uniquement**.*
+
+*Langage : bordures épaisses (3 px) + **ombres dures décalées** (réplique nette, jamais de flou), radius réduits (8-10), titres en **pixel font** (Press Start 2P, OFL — réservée aux chaînes ASCII : logo, codes, boutons de menu, en-têtes), **scanlines CRT** discrètes en overlay, **pips de dés carrés**, curseur de sélection « ▸ » suivant le focus clavier/manette, accroches clignotantes (« INSERT DE »).*
 
 ### Palette (fond clair ivoire)
 
@@ -105,21 +107,23 @@ Document de référence pour les choix graphiques et le pipeline d'assets. Compl
 
 ### Typographie
 
-- **Fredoka** (SIL OFL, variable wght) — display : titres, badges, chiffres d'enchère, « DUDO ! ». Ronde et grasse, c'est l'ADN Wii.
-- **Nunito** (SIL OFL, variable wght) — corps, boutons, chips. Ronde, très lisible.
-- Échelle (portrait 720×1280) : titre écran 60-64 · titre overlay 54 · enchère 34 · boutons 26 · corps 20-22 · secondaire 15-18.
-- Les **dés s'affichent en icônes de faces** (pips), pas en chiffre. Une enchère se lit « 5 × ⚄ », pas « 5 x 4 ».
+- **Press Start 2P** (OFL) — pixel : logo, titres, codes de salle, boutons de menu, en-têtes de section. ASCII/Latin-1 seulement.
+- **Fredoka** (SIL OFL, variable wght) — display en jeu : badges, chiffres d'enchère, « DUDO ! ».
+- **Nunito** (SIL OFL, variable wght) — corps, chips, champs, options.
+- Échelle (portrait 720×1280) : logo pixel 52 · titre pixel 16 · en-tête pixel 10 · enchère 34 · boutons 26 (menu pixel 15) · corps 20-22 · secondaire 15-18.
+- Les **dés s'affichent en icônes de faces** (pips **carrés**), pas en chiffre. Une enchère se lit « 5 × ⚄ », pas « 5 x 4 ».
 
 ### Widgets
 
-- **Boutons « soft plastic »** : fond uni, radius 18, **biseau inférieur 3 px** de la teinte sombre de la variante ; pressé = biseau réduit à 1 px + teinte assombrie ; désactivé = opacité 45 %.
+- **Boutons « borne »** : fond uni, radius 8, **bordure 3 px** de la teinte sombre de la variante + **ombre dure 6 px** ; pressé = ombre réduite à 1 px + teinte assombrie ; désactivé = opacité 45 %. Variante `pix` : libellé pixel pour les menus.
 - Variantes : `primary` (bleu Wii plein, texte blanc), `btn` (blanc cassé, texte encre — secondaire/neutre), `dudo` (rouge), `calza` (vert).
 - **Cibles tactiles ≥ 48 px** partout (≈56 px boutons, 48 px icônes de faces — même hauteur que le stepper de quantité).
-- **Panneaux** : blancs, radius 20, bordure `#DDE3EB` + biseau léger.
-- **Chips joueur** : pill couleur du siège, pseudo blanc — un joueur = une couleur partout (scène, chip, badge).
-- **Champs de saisie** : fond blanc, bord 2 px clair ; focus → bord bleu Wii.
+- **Panneaux** : radius 10, bordure 3 px + ombre dure 7 px (« écran de borne »).
+- **Chips joueur** : pill couleur du siège à liseré sombre, pseudo blanc — un joueur = une couleur partout (scène, chip, badge).
+- **Champs de saisie** : bordure 3 px + ombre dure ; focus → bord bleu Wii ; le code de salle se tape en pixel font centrée.
 - **Badge compteur de dés** : badge circulaire à la couleur du joueur **au-dessus de sa pill pseudo**, le tout en billboard 2D au-dessus du Mii — lisible de loin, plus de texte « N dé(s) ».
 - **Joueur actif** : sa pill pseudo reçoit un **anneau blanc + halo** et pulse doucement (scale 1 → 1.09 en boucle).
+- **Scanlines** : balayage CRT en overlay, encre ~4 % — présentes sur tous les écrans 2D.
 
 ### HUD (portrait, zones)
 
