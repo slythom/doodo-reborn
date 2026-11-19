@@ -251,7 +251,7 @@ func _build_ui() -> void:
 
 	# Accroche clignotante façon borne (« INSERT COIN » détourné).
 	var insc := CenterContainer.new()
-	var ins := UI.pix_label("- INSERT DE -", 13, UI.DIM)
+	var ins := UI.pix_label("- INSERT DÉ -", 16, UI.AMBER)
 	insc.add_child(ins)
 	_home.add_child(insc)
 	UI.blink(ins)
