@@ -5,7 +5,7 @@ extends RefCounted
 # Palette, styles, icônes de dés vectorielles : tout est généré en code.
 
 # ---- Palette : neutres thémables (clair/sombre) + accents fixes ----
-static var dark := false                # thème courant (menu : switch)
+static var dark := true                 # thème courant (menu : switch) — sombre par défaut (#18)
 
 static var BG := Color("#EEF2F7")       # fond d'écran
 static var PANEL := Color("#FFFFFF")    # cartes, pills, boutons neutres
@@ -67,7 +67,7 @@ static func set_dark(b: bool, persist := true) -> void:
 static func load_theme() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("user://settings.cfg") == OK:
-		set_dark(bool(cfg.get_value("display", "dark", false)), false)
+		set_dark(bool(cfg.get_value("display", "dark", true)), false)
 
 # ---- Audio : volume + mute persistés dans user://settings.cfg ----
 static var sfx_muted := false
