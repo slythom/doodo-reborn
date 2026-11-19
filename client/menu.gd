@@ -726,7 +726,7 @@ func _rebuild() -> void:
 # (clavier/manette) — signal viewport, ça couvre aussi les contrôles
 # créés après coup (lignes du lobby public…).
 func _move_cursor(c: Control) -> void:
-	if not is_instance_valid(c) or not c.is_visible_in_tree():
+	if not _cursor_target_ok(c):
 		_cursor.visible = false
 		return
 	var gp := c.get_global_rect()
@@ -739,6 +739,24 @@ func _move_cursor(c: Control) -> void:
 	_cur_t = _cursor.create_tween() # lié au curseur : meurt avec lui (rebuild)
 	_cur_t.tween_property(_cursor, "position", tgt, 0.12) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+# Le curseur ne suit que les vrais widgets interactifs — pas les popups
+# d'OptionButton, panels ou ScrollContainer qui peuvent prendre le
+# focus et plaçaient le triangle entre les lignes (#12).
+func _cursor_target_ok(c: Control) -> bool:
+	return is_instance_valid(c) and c.is_visible_in_tree() \
+		and (c is BaseButton or c is LineEdit or c is Range \
+			or c is UI.ThemeSwitch)
+
+func _process(_d: float) -> void:
+	# gui_focus_changed ne tire que sur PRISE de focus : quand le
+	# contrôle focusé est caché ou libéré (retour accueil, rebuild),
+	# le focus est relâché sans signal et le curseur restait figé à
+	# sa dernière position (#12). On le masque dès que plus rien de
+	# valide n'a le focus.
+	if _cursor != null and _cursor.visible and \
+			not _cursor_target_ok(get_viewport().gui_get_focus_owner()):
+		_cursor.visible = false
 
 func _set_status(t: String, col := UI.RED_DK) -> void:
 	_status.text = t
