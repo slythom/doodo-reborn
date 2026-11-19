@@ -494,14 +494,17 @@ func _legal(q: int, v: int) -> bool:
 func _step_btn(t: String) -> Button:
 	var b := Button.new()
 	b.text = t
-	b.custom_minimum_size = Vector2(60, 60)
+	b.custom_minimum_size = Vector2(76, 76)
 	b.add_theme_font_override("font", UI.font_w(800))
-	b.add_theme_font_size_override("font_size", 30)
+	b.add_theme_font_size_override("font_size", 36)
 	b.add_theme_color_override("font_color", UI.BLUE)
-	b.add_theme_color_override("font_hover_color", UI.BLUE_DK)
+	b.add_theme_color_override("font_hover_color", UI.BLUE_HI)
+	# Feedback du tap en turquoise, pas en bleu foncé (#19).
+	b.add_theme_color_override("font_pressed_color", UI.BLUE_HI)
 	var tr := UI.sb(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 10, 0)
-	for st in ["normal", "pressed", "focus", "disabled"]:
+	for st in ["normal", "focus", "disabled"]:
 		b.add_theme_stylebox_override(st, tr)
+	b.add_theme_stylebox_override("pressed", UI.sb(Color(UI.BLUE_HI, 0.22), Color(0, 0, 0, 0), 10, 0))
 	b.add_theme_stylebox_override("hover", UI.sb(Color(UI.BLUE, 0.16), Color(0, 0, 0, 0), 10, 0))
 	return b
 
@@ -1100,10 +1103,10 @@ func _hud() -> void:
 	var minus := _step_btn("−")
 	minus.pressed.connect(func() -> void: _set_qty(-1))
 	sh.add_child(minus)
-	qty_lbl = UI.label("1", 30, UI.INK, 700, true)
+	qty_lbl = UI.label("1", 38, UI.INK, 700, true)
 	qty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	qty_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	qty_lbl.custom_minimum_size = Vector2(66, 60)
+	qty_lbl.custom_minimum_size = Vector2(84, 76)
 	sh.add_child(qty_lbl)
 	var plus := _step_btn("+")
 	plus.pressed.connect(func() -> void: _set_qty(1))
