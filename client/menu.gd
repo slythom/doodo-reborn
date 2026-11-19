@@ -151,7 +151,7 @@ func _build_ui() -> void:
 	add_child(center)
 
 	_home = VBoxContainer.new()
-	_home.custom_minimum_size.x = 500
+	_home.custom_minimum_size.x = _card_w()
 	_home.add_theme_constant_override("separation", 20)
 	center.add_child(_home)
 
@@ -161,17 +161,17 @@ func _build_ui() -> void:
 	logo.alignment = BoxContainer.ALIGNMENT_CENTER
 	logo.add_theme_constant_override("separation", 20)
 	_home.add_child(logo)
-	var d1 := UI.DieIcon.new(3, 40)
+	var d1 := UI.DieIcon.new(3, 48)
 	d1.rotation_degrees = -9
 	logo.add_child(d1)
-	var title := UI.pix_label("DOODO", 52, UI.BLUE)
+	var title := UI.pix_label("DOODO", 64, UI.BLUE)
 	title.add_theme_color_override("font_shadow_color", UI.BLUE_DK)
 	title.add_theme_constant_override("shadow_offset_x", 4)
 	title.add_theme_constant_override("shadow_offset_y", 5)
 	title.add_theme_constant_override("shadow_outline_size", 0)
 	title.resized.connect(func() -> void: title.pivot_offset = title.size / 2.0)
 	logo.add_child(title)
-	var d2 := UI.DieIcon.new(5, 40)
+	var d2 := UI.DieIcon.new(5, 48)
 	d2.rotation_degrees = 9
 	logo.add_child(d2)
 	# Le titre flotte doucement (wobble infini, écran d'accueil Wii).
@@ -183,7 +183,7 @@ func _build_ui() -> void:
 	wob.parallel().tween_property(title, "rotation_degrees", 0.0, 1.4).set_trans(Tween.TRANS_SINE)
 
 	var subc := CenterContainer.new()
-	var tag := UI.pill("PERUDO EN LIGNE", Color("#D9F1FB"), UI.BLUE_DK, 11)
+	var tag := UI.pill("PERUDO EN LIGNE", Color("#D9F1FB"), UI.BLUE_DK, 13)
 	tag.add_theme_font_override("font", UI.font_pix())
 	subc.add_child(tag)
 	_home.add_child(subc)
@@ -191,10 +191,10 @@ func _build_ui() -> void:
 	# Carte centrale : formulaire dans un panneau blanc à ombre portée.
 	_home_card = UI.panel()
 	var csb := _home_card.get_theme_stylebox("panel") as StyleBoxFlat
-	csb.content_margin_left = 26
-	csb.content_margin_right = 26
-	csb.content_margin_top = 24
-	csb.content_margin_bottom = 24
+	csb.content_margin_left = 30
+	csb.content_margin_right = 30
+	csb.content_margin_top = 28
+	csb.content_margin_bottom = 28
 	_home.add_child(_home_card)
 	var cv := VBoxContainer.new()
 	cv.add_theme_constant_override("separation", 14)
@@ -228,18 +228,18 @@ func _build_ui() -> void:
 		ln.add_theme_stylebox_override("separator", UI.sb(UI.EDGE_DK, UI.EDGE_DK, 1, 0))
 		seprow.add_child(ln)
 		if i == 0:
-			seprow.add_child(UI.label("ou", 15, UI.DIM, 800))
+			seprow.add_child(UI.label("ou", 17, UI.DIM, 800))
 
 	var join_row := HBoxContainer.new()
 	join_row.add_theme_constant_override("separation", 12)
 	cv.add_child(join_row)
 
 	_code_edit = _line_edit("CODE", 6)
-	_code_edit.custom_minimum_size.x = 170
+	_code_edit.custom_minimum_size.x = 200
 	_code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# Le code de salle en pixel font : lettres ASCII, rendu « écran de borne ».
 	_code_edit.add_theme_font_override("font", UI.font_pix())
-	_code_edit.add_theme_font_size_override("font_size", 20)
+	_code_edit.add_theme_font_size_override("font_size", 24)
 	join_row.add_child(_code_edit)
 
 	var join_btn := UI.button("REJOINDRE", "btn", true)
@@ -251,26 +251,26 @@ func _build_ui() -> void:
 
 	# Accroche clignotante façon borne (« INSERT COIN » détourné).
 	var insc := CenterContainer.new()
-	var ins := UI.pix_label("- INSERT DE -", 11, UI.DIM)
+	var ins := UI.pix_label("- INSERT DE -", 13, UI.DIM)
 	insc.add_child(ins)
 	_home.add_child(insc)
 	UI.blink(ins)
 
-	_status = UI.label("", 18, UI.RED_DK)
+	_status = UI.label("", 20, UI.RED_DK)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_home.add_child(_status)
 
 	# Version visible en bas de l'écran d'accueil : permet de distinguer
 	# les builds beta installés à la main (sideload) d'un coup d'œil.
 	var vc := CenterContainer.new()
-	vc.add_child(UI.label("v" + ProjectSettings.get_setting("application/config/version", "?"), 13, UI.DIM))
+	vc.add_child(UI.label("v" + ProjectSettings.get_setting("application/config/version", "?"), 15, UI.DIM))
 	_home.add_child(vc)
 
 	# Switch thème clair/sombre en bas de la carte.
 	var theme_row := HBoxContainer.new()
 	theme_row.add_theme_constant_override("separation", 10)
 	cv.add_child(theme_row)
-	var tl := UI.label("Mode sombre", 18, UI.INK, 700)
+	var tl := UI.label("Mode sombre", 20, UI.INK, 700)
 	tl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	theme_row.add_child(tl)
 	var spacer := Control.new()
@@ -286,7 +286,7 @@ func _build_ui() -> void:
 	var audio_row := HBoxContainer.new()
 	audio_row.add_theme_constant_override("separation", 10)
 	cv.add_child(audio_row)
-	var al := UI.label("Son", 18, UI.INK, 700)
+	var al := UI.label("Son", 20, UI.INK, 700)
 	al.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	audio_row.add_child(al)
 	var audio_spacer := Control.new()
@@ -297,7 +297,7 @@ func _build_ui() -> void:
 	vol_slider.max_value = 100
 	vol_slider.step = 5
 	vol_slider.value = UI.sfx_volume * 100
-	vol_slider.custom_minimum_size.x = 110
+	vol_slider.custom_minimum_size = Vector2(110, 40)
 	vol_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	audio_row.add_child(vol_slider)
 	var audio_sw := UI.ThemeSwitch.new(not UI.sfx_muted, false, true)
@@ -311,12 +311,12 @@ func _build_ui() -> void:
 	var srv_row := HBoxContainer.new()
 	srv_row.add_theme_constant_override("separation", 10)
 	cv.add_child(srv_row)
-	var srv_lbl := UI.label("Serveur", 15, UI.DIM, 700)
+	var srv_lbl := UI.label("Serveur", 17, UI.DIM, 700)
 	srv_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	srv_row.add_child(srv_lbl)
 	var srv_edit := _line_edit(Net.DEFAULT_URL, 80)
-	srv_edit.add_theme_font_size_override("font_size", 16)
-	srv_edit.custom_minimum_size.y = 48
+	srv_edit.add_theme_font_size_override("font_size", 20)
+	srv_edit.custom_minimum_size.y = 56
 	srv_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	srv_edit.text = Net.server
 	var apply_srv := func() -> void:
@@ -340,16 +340,16 @@ func _build_ui() -> void:
 
 	_lobby = VBoxContainer.new()
 	_lobby.visible = false
-	_lobby.custom_minimum_size.x = 500
+	_lobby.custom_minimum_size.x = _card_w()
 	_lobby.add_theme_constant_override("separation", 18)
 	lobby_wrap.add_child(_lobby)
 
 	_lobby_card = UI.panel()
 	var lsb := _lobby_card.get_theme_stylebox("panel") as StyleBoxFlat
-	lsb.content_margin_left = 26
-	lsb.content_margin_right = 26
-	lsb.content_margin_top = 24
-	lsb.content_margin_bottom = 24
+	lsb.content_margin_left = 30
+	lsb.content_margin_right = 30
+	lsb.content_margin_top = 28
+	lsb.content_margin_bottom = 28
 	_lobby.add_child(_lobby_card)
 	var lv := VBoxContainer.new()
 	lv.add_theme_constant_override("separation", 12)
@@ -498,7 +498,7 @@ func _build_ui() -> void:
 
 	_browse = VBoxContainer.new()
 	_browse.visible = false
-	_browse.custom_minimum_size.x = 500
+	_browse.custom_minimum_size.x = _card_w()
 	_browse.add_theme_constant_override("separation", 14)
 	browse_wrap.add_child(_browse)
 
@@ -688,15 +688,20 @@ func _sync_opt(o: OptionButton, meta_val: Variant) -> void:
 		if cur:
 			o.select(i)
 
+# Largeur des cartes de menu : quasi plein écran sur mobile (canvas
+# étroit) mais plafonnée pour rester une « carte » sur desktop (#11).
+func _card_w() -> float:
+	return clampf(get_viewport_rect().size.x - 40.0, 500.0, 660.0)
+
 # Champ de saisie « écran de borne » : bordure épaisse + ombre dure,
 # focus bleu — même signature que les boutons.
 func _line_edit(placeholder: String, maxlen: int) -> LineEdit:
 	var e := LineEdit.new()
 	e.placeholder_text = placeholder
 	e.max_length = maxlen
-	e.custom_minimum_size.y = 56
+	e.custom_minimum_size.y = 64
 	e.add_theme_font_override("font", UI.font_w(700))
-	e.add_theme_font_size_override("font_size", 26)
+	e.add_theme_font_size_override("font_size", 30)
 	e.add_theme_color_override("font_color", UI.INK)
 	e.add_theme_color_override("font_placeholder_color", UI.DIM)
 	e.add_theme_color_override("caret_color", UI.BLUE)

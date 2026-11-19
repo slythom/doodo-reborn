@@ -172,7 +172,7 @@ static func button(text: String, kind := "btn", pix := false) -> Button:
 		b.add_theme_font_size_override("font_size", 15)
 	else:
 		b.add_theme_font_override("font", font_w(800))
-		b.add_theme_font_size_override("font_size", 26)
+		b.add_theme_font_size_override("font_size", 28)
 	var n: StyleBoxFlat
 	match kind:
 		"primary":
@@ -201,7 +201,7 @@ static func button(text: String, kind := "btn", pix := false) -> Button:
 	b.add_theme_stylebox_override("normal", n)
 	var dis := px(Color(n.bg_color, 0.5), n.border_color, 8, n.get_border_width_min())
 	b.add_theme_stylebox_override("disabled", dis)
-	b.custom_minimum_size = Vector2(0, 56)
+	b.custom_minimum_size = Vector2(0, 60)
 	# Focus visible pour la navigation clavier/manette : même style que hover.
 	var hov: StyleBox = b.get_theme_stylebox("hover")
 	if hov != null:
