@@ -431,6 +431,7 @@ class CircleBadge:
 	var text := ""
 	var col := UI.BLUE
 	var side := 40.0
+	var accent := false # liseré ambre : un tap révèle les dés du siège (#20)
 
 	func _init(t := "", c := UI.BLUE, s := 40.0) -> void:
 		text = t
@@ -447,7 +448,7 @@ class CircleBadge:
 		var r := side / 2.0
 		var c := Vector2(r, r)
 		draw_circle(c, r, col)
-		draw_arc(c, r - 2.0, 0.0, TAU, 40, Color.WHITE, 3.0, true)
+		draw_arc(c, r - 2.0, 0.0, TAU, 40, UI.AMBER if accent else Color.WHITE, 3.0, true)
 		var f := UI.font_w(700, true)
 		var fs := int(side * 0.52)
 		var ts := f.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)

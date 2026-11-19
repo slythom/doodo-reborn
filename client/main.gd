@@ -42,6 +42,8 @@ var rules_row: HBoxContainer # pills des règles perso actives (§1.5)
 var status_lbl: Label        # pill de toast (chat, élimination…)
 var chat_panel: PanelContainer # panneau des messages prédéfinis (§4.3)
 var my_dice_box: HBoxContainer # ma main : icônes de dés 2D
+var hand_cc: CenterContainer   # centreur de ma main (repositionné au-dessus du panneau)
+var hud_layer: CanvasLayer     # modales (dés révélés) ajoutées ici : au-dessus de tout le HUD
 var qty_val := 1               # quantité choisie (stepper −/+)
 var qty_lbl: Label
 var face_icons: Array = []   # sélecteur de face : DieIcons cliquables
@@ -307,6 +309,13 @@ func _update_players() -> void:
 		if vals.is_empty() or not bool(view.get("god", false)):
 			vals = UI.arr(p.get("pub_dice"))
 		seat["dice_vals"] = vals
+		# Liseré ambre sur le compteur : le tap révèle les dés (#20).
+		if seat.has("badge"):
+			var cb: UI.CircleBadge = seat["badge"]
+			var want := not vals.is_empty()
+			if cb.accent != want:
+				cb.accent = want
+				cb.queue_redraw()
 
 # Ma main : rangée d'icônes 2D dans le HUD (plus de dés 3D sur la table).
 # Les dés pop en cascade quand la main change (lancer, perte, gain).
@@ -926,6 +935,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	Net.emote(mii.get_meta("seat"), cur_item)  # le serveur diffuse aux autres
 	_throw_item(mii, cur_item)                 # anim optimiste locale
 
+# Ma main flotte au-dessus du panneau d'action, dont la hauteur varie
+# (barre mode dieu, enchère en cours…). Recalée à chaque resize/visibilité.
+func _place_hand() -> void:
+	if not is_instance_valid(hand_cc) or not is_instance_valid(action_bar):
+		return
+	var clearance := 22
+	if action_bar.visible:
+		clearance += int(action_bar.size.y)
+	hand_cc.offset_bottom = -clearance
+	hand_cc.offset_top = -clearance - 56
+
 # Dés révélés d'un siège (mode dieu §4.5 / Dé public §1.5) : modale au
 # tap sur son badge — refermée par un tap n'importe où (#20).
 func _show_seat_dice(p_seat: int) -> void:
@@ -935,7 +955,7 @@ func _show_seat_dice(p_seat: int) -> void:
 	var scrim := ColorRect.new()
 	scrim.color = Color(0, 0, 0, 0.5)
 	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(scrim)
+	hud_layer.add_child(scrim) # dans le CanvasLayer : au-dessus du HUD
 	var cc := CenterContainer.new()
 	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE # les taps passent au scrim
@@ -979,6 +999,7 @@ func _on_notice(d: Dictionary) -> void:
 
 func _hud() -> void:
 	var layer := CanvasLayer.new()
+	hud_layer = layer
 	add_child(layer)
 
 	# Bandeau haut : titre, badge de tour, enchère en cours.
@@ -1050,15 +1071,15 @@ func _hud() -> void:
 		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
 	layer.add_child(leave_btn)
 
-	# Ma main : rangée d'icônes flottant juste au-dessus du panneau.
-	var mc := CenterContainer.new()
-	mc.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	mc.offset_top = -216
-	mc.offset_bottom = -164
-	layer.add_child(mc)
+	# Ma main : rangée d'icônes flottant juste au-dessus du panneau. La
+	# position suit la hauteur RÉELLE du panneau (variable selon le tour,
+	# le mode dieu…) — les offsets fixes la laissaient recouverte (#20).
+	hand_cc = CenterContainer.new()
+	hand_cc.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	layer.add_child(hand_cc)
 	my_dice_box = HBoxContainer.new()
 	my_dice_box.add_theme_constant_override("separation", 10)
-	mc.add_child(my_dice_box)
+	hand_cc.add_child(my_dice_box)
 
 	# Sélecteur de projectile : chips verticales au bord droit, à hauteur de
 	# pouce. L'item armé porte un anneau bleu ; le tap sur un joueur le lance.
@@ -1092,6 +1113,9 @@ func _hud() -> void:
 	action_bar.offset_top = -14
 	action_bar.offset_bottom = -14
 	action_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	action_bar.resized.connect(_place_hand)
+	action_bar.visibility_changed.connect(_place_hand)
+	_place_hand.call_deferred()
 	layer.add_child(action_bar)
 
 	var av := VBoxContainer.new()
