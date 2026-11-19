@@ -151,7 +151,12 @@ func _on_view(v: Dictionary) -> void:
 func _arc_angle(idx: int, total: int) -> float:
 	if total <= 1:
 		return ARC_CENTER
-	return ARC_LEFT + idx * (ARC_RIGHT - ARC_LEFT) / float(total - 1)
+	# Table pleine : arc resserré — à 5 adversaires les extrémités (et les
+	# badges mode dieu au-dessus) dépassaient du champ caméra (#20).
+	var shrink := maxf(0.0, total - 4) * 7.0
+	var left := ARC_LEFT + shrink
+	var right := ARC_RIGHT - shrink
+	return left + idx * (right - left) / float(total - 1)
 
 func _build_seats() -> void:
 	var n: int = UI.arr(view.get("players")).size()
@@ -205,7 +210,9 @@ func _build_seats() -> void:
 		# Pseudo + compteur : chip colorée + badge circulaire (comme la maquette),
 		# rendus dans un SubViewport affiché en billboard au-dessus du Mii.
 		var bdg := _seat_badge(p.get("name", "?"), p_seat)
-		bdg.sprite.position = pos + Vector3(0, 1.86, 0)
+		# Badge resserré vers l'axe : le sprite (pseudo + rangée de dés mode
+		# dieu) des sièges extrêmes était croppé aux bords de l'écran (#20).
+		bdg.sprite.position = Vector3(clampf(pos.x, -0.85, 0.85), 1.86, pos.z)
 		seat["badge"] = bdg.badge
 		seat["badge_sp"] = bdg.sprite
 		seat["chip"] = bdg.chip
