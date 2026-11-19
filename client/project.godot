@@ -11,8 +11,8 @@ config_version=5
 [application]
 
 config/name="Doodo Proto"
-config/version="0.10.0-8"
-run/main_scene="res://menu.tscn"
+config/version="0.10.0-9"
+run/main_scene="res://_shot.tscn"
 config/features=PackedStringArray("4.7")
 
 [autoload]

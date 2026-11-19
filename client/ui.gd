@@ -326,6 +326,18 @@ static func info_btn() -> Button:
 	_squish(b)
 	return b
 
+# Vrai tap utilisateur : ScreenTouch direct, ou clic souris physique.
+# Sur mobile, emulate_mouse_from_touch livre chaque tap en double — le
+# touch PUIS un MouseButton émulé (device=DEVICE_ID_EMULATION). Sans ce
+# filtre les handlers touch+mouse déclenchaient deux fois : switch qui
+# « ne bascule pas », dé qui saute deux faces, émote envoyé x2 (#13).
+static func tap(ev: InputEvent) -> bool:
+	if ev is InputEventScreenTouch:
+		return ev.pressed
+	return ev is InputEventMouseButton and ev.pressed \
+		and ev.button_index == MOUSE_BUTTON_LEFT \
+		and ev.device != InputEvent.DEVICE_ID_EMULATION
+
 # Label pixel (titres/logo arcade) — Press Start 2P, chaînes ASCII.
 static func pix_label(text: String, size := 32, color: Color = INK) -> Label:
 	var l := Label.new()
@@ -648,9 +660,7 @@ class ThemeSwitch:
 	func _gui_input(ev: InputEvent) -> void:
 		if not editable:
 			return
-		var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
-			or (ev is InputEventScreenTouch and ev.pressed) \
-			or ev.is_action_pressed("ui_accept")
+		var tap: bool = UI.tap(ev) or ev.is_action_pressed("ui_accept")
 		if tap:
 			accept_event()
 			set_on(not on)

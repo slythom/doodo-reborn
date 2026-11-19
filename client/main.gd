@@ -366,9 +366,7 @@ func _update_god_bar() -> void:
 		var di := UI.DieIcon.new(int(v), 38)
 		di.mouse_filter = Control.MOUSE_FILTER_STOP
 		di.gui_input.connect(func(ev: InputEvent) -> void:
-			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
-				or (ev is InputEventScreenTouch and ev.pressed)
-			if tap:
+			if UI.tap(ev):
 				di.value = di.value % 6 + 1
 				di.queue_redraw()
 				UI.punch(di, 0.12))
@@ -570,9 +568,7 @@ func _build_steal_picker() -> void:
 		chip.mouse_filter = Control.MOUSE_FILTER_STOP
 		var seat := s
 		chip.gui_input.connect(func(ev: InputEvent) -> void:
-			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
-				or (ev is InputEventScreenTouch and ev.pressed)
-			if tap:
+			if UI.tap(ev):
 				Net.steal(seat))
 		steal_row.add_child(chip)
 	var hint := UI.label("Pas de choix = victime automatique à la fin du timer", 13, Color("#7E8BAE"), 700)
@@ -914,7 +910,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed:
 		pos = event.position
 		pressed = true
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+	elif event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT \
+			and event.device != InputEvent.DEVICE_ID_EMULATION:
 		pos = event.position
 		pressed = true
 	if not pressed:
@@ -1039,9 +1037,7 @@ func _hud() -> void:
 		ic.tooltip_text = ITEMS[kind].label
 		var k: String = kind
 		ic.gui_input.connect(func(ev: InputEvent) -> void:
-			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
-				or (ev is InputEventScreenTouch and ev.pressed)
-			if tap:
+			if UI.tap(ev):
 				_set_item(k))
 		item_icons[kind] = ic
 		ib.add_child(ic)
@@ -1125,9 +1121,7 @@ func _hud() -> void:
 		ic.mouse_filter = Control.MOUSE_FILTER_STOP
 		var face := v + 1
 		ic.gui_input.connect(func(ev: InputEvent) -> void:
-			var tap: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) \
-				or (ev is InputEventScreenTouch and ev.pressed)
-			if tap:
+			if UI.tap(ev):
 				_set_face(face)
 				var ft := ic.create_tween()
 				ft.tween_property(ic, "scale", Vector2(1.28, 1.28), 0.07)

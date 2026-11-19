@@ -630,7 +630,7 @@ func _info_modal(title: String, desc: String) -> void:
 	ok.pressed.connect(func() -> void: scrim.queue_free())
 	v.add_child(ok)
 	scrim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed:
+		if UI.tap(ev):
 			scrim.queue_free())
 	UI.pop_in(p)
 
