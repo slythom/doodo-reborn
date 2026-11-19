@@ -1,0 +1,10 @@
+# cloudflared — tunnel nommé « doodo » (Option A.2).
+# Remplacer <UUID> par l'identifiant affiché par `cloudflared tunnel create doodo`
+# et <ton-domaine> par le sous-domaine routé (tunnel route dns …).
+tunnel: <UUID>
+credentials-file: ~/.cloudflared/<UUID>.json
+
+ingress:
+  - hostname: doodo.<ton-domaine>
+    service: http://localhost:8080
+  - service: http_status:404

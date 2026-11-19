@@ -1,0 +1,21 @@
+# systemd unit — doodo-server (Option B : VPS).
+# /etc/systemd/system/doodo-server.service — binaire dans /usr/local/bin.
+[Unit]
+Description=Doodo game server (WebSocket hub)
+After=network.target
+
+[Service]
+Type=simple
+User=doodo
+ExecStart=/usr/local/bin/doodo-server
+Environment=DOODO_ADDR=127.0.0.1:8080
+Restart=on-failure
+RestartSec=2
+# Durcissement minimal (binaire stateless, n'écrit que les logs).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

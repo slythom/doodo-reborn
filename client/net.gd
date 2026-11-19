@@ -12,10 +12,14 @@ signal notice_msg(data: Dictionary)
 signal net_error(code: String, message: String)
 signal room_list(rooms: Array)
 
-const URL := "ws://localhost:8080/ws"
+const DEFAULT_URL := "ws://localhost:8080/ws"
 # DOODO_PROFILE permet plusieurs instances sur la même machine (jetons
 # distincts, sinon la seconde vole la session de la première).
 var CFG: String = "user://session%s.cfg" % OS.get_environment("DOODO_PROFILE")
+
+# Serveur choisi par l'utilisateur (persisté) ou via DOODO_SERVER — vide =
+# défaut (localhost, dev). Résolution dans ws_url().
+var server := ""
 
 var ws: WebSocketPeer
 var token := ""
@@ -27,13 +31,36 @@ func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(CFG) == OK:
 		token = cfg.get_value("session", "token", "")
+		server = cfg.get_value("session", "server", "")
+	var env := OS.get_environment("DOODO_SERVER")
+	if env != "":
+		server = env
 	set_process(false)
+
+# ws_url : URL effective — normalise « hote.fr » en « wss://hote.fr/ws ».
+func ws_url() -> String:
+	var u := server.strip_edges()
+	if u == "":
+		return DEFAULT_URL
+	if "://" not in u:
+		u = "wss://" + u
+	if not u.ends_with("/ws"):
+		u = u.rstrip("/") + "/ws"
+	return u
+
+# set_server : mémorise le serveur saisi dans l'UI (persisté en user://).
+func set_server(u: String) -> void:
+	server = u.strip_edges()
+	var cfg := ConfigFile.new()
+	cfg.load(CFG)
+	cfg.set_value("session", "server", server)
+	cfg.save(CFG)
 
 func connect_server() -> void:
 	if is_open() or (ws != null and ws.get_ready_state() == WebSocketPeer.STATE_CONNECTING):
 		return
 	ws = WebSocketPeer.new()
-	if ws.connect_to_url(URL) != OK:
+	if ws.connect_to_url(ws_url()) != OK:
 		net_error.emit("connect", "impossible de joindre le serveur")
 		return
 	_was_open = false

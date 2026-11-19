@@ -260,6 +260,12 @@ func _build_ui() -> void:
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_home.add_child(_status)
 
+	# Version visible en bas de l'écran d'accueil : permet de distinguer
+	# les builds beta installés à la main (sideload) d'un coup d'œil.
+	var vc := CenterContainer.new()
+	vc.add_child(UI.label("v" + ProjectSettings.get_setting("application/config/version", "?"), 13, UI.DIM))
+	_home.add_child(vc)
+
 	# Switch thème clair/sombre en bas de la carte.
 	var theme_row := HBoxContainer.new()
 	theme_row.add_theme_constant_override("separation", 10)
@@ -300,6 +306,26 @@ func _build_ui() -> void:
 		UI.set_audio(not audio_sw.on, vol_slider.value / 100.0)
 	audio_sw.toggled.connect(func(_on: bool) -> void: apply_audio.call())
 	vol_slider.drag_ended.connect(func(_changed: bool) -> void: apply_audio.call())
+
+	# Serveur : URL du backend (beta — tunnel/prod). Vide = localhost.
+	var srv_row := HBoxContainer.new()
+	srv_row.add_theme_constant_override("separation", 10)
+	cv.add_child(srv_row)
+	var srv_lbl := UI.label("Serveur", 15, UI.DIM, 700)
+	srv_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	srv_row.add_child(srv_lbl)
+	var srv_edit := _line_edit(Net.DEFAULT_URL, 80)
+	srv_edit.add_theme_font_size_override("font_size", 16)
+	srv_edit.custom_minimum_size.y = 48
+	srv_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	srv_edit.text = Net.server
+	var apply_srv := func() -> void:
+		Net.set_server(srv_edit.text)
+		# Réaffiche la valeur canonique (ex. « hote.fr » saisi tel quel).
+		srv_edit.text = Net.server
+	srv_edit.text_submitted.connect(func(_t: String) -> void: apply_srv.call())
+	srv_edit.focus_exited.connect(func() -> void: apply_srv.call())
+	srv_row.add_child(srv_edit)
 
 	UI.pop_in(_home_card)
 
