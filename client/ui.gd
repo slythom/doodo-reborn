@@ -305,14 +305,24 @@ static func info_btn() -> Button:
 	var b := Button.new()
 	b.text = "i"
 	b.add_theme_font_override("font", font_w(800, true)) # Fredoka — « i » rond
-	b.add_theme_font_size_override("font_size", 20)
+	b.add_theme_font_size_override("font_size", 18)
 	b.custom_minimum_size = Vector2(36, 36)
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		b.add_theme_color_override(c, Color.WHITE)
-	b.add_theme_stylebox_override("normal", sb(BLUE, BLUE_DK, 18, 2))
-	b.add_theme_stylebox_override("hover", sb(BLUE_HI, BLUE_DK, 18, 2))
-	b.add_theme_stylebox_override("pressed", sb(BLUE_DK, BLUE_DK, 18, 2))
-	b.add_theme_stylebox_override("focus", sb(BLUE, BLUE_DK, 18, 3))
+	# Marges symétriques réduites : le stylebox standard (16/16/8/8) poussait
+	# la largeur intrinsèque au-delà de la hauteur → badge ovale (#17). Ici
+	# la taille intrinsèque reste sous 36×36 : le bouton est un vrai rond.
+	var circ := func(bg: Color, border: Color, bw: int) -> StyleBoxFlat:
+		var s := sb(bg, border, 18, bw)
+		s.content_margin_left = 10
+		s.content_margin_right = 10
+		s.content_margin_top = 4
+		s.content_margin_bottom = 4
+		return s
+	b.add_theme_stylebox_override("normal", circ.call(BLUE, BLUE_DK, 2))
+	b.add_theme_stylebox_override("hover", circ.call(BLUE_HI, BLUE_DK, 2))
+	b.add_theme_stylebox_override("pressed", circ.call(BLUE_DK, BLUE_DK, 2))
+	b.add_theme_stylebox_override("focus", circ.call(BLUE, BLUE_DK, 3))
 	_squish(b)
 	return b
 
