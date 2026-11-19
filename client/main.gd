@@ -496,9 +496,9 @@ func _legal(q: int, v: int) -> bool:
 func _step_btn(t: String) -> Button:
 	var b := Button.new()
 	b.text = t
-	b.custom_minimum_size = Vector2(38, 42)
+	b.custom_minimum_size = Vector2(60, 60)
 	b.add_theme_font_override("font", UI.font_w(800))
-	b.add_theme_font_size_override("font_size", 22)
+	b.add_theme_font_size_override("font_size", 30)
 	b.add_theme_color_override("font_color", UI.BLUE)
 	b.add_theme_color_override("font_hover_color", UI.BLUE_DK)
 	var tr := UI.sb(Color(0, 0, 0, 0), Color(0, 0, 0, 0), 10, 0)
@@ -1084,40 +1084,44 @@ func _hud() -> void:
 	gok.pressed.connect(_god_confirm)
 	god_bar.add_child(gok)
 
-	# pickrow : stepper quantité [−][N][+] + sélecteur de faces.
-	var pickrow := HBoxContainer.new()
-	pickrow.alignment = BoxContainer.ALIGNMENT_CENTER
-	pickrow.add_theme_constant_override("separation", 10)
-	av.add_child(pickrow)
+	# pickcol : stepper quantité sur sa ligne (cibles tactiles ~60 px — #14),
+	# sélecteur de faces agrandi en dessous : une seule ligne était trop serrée.
+	var pickcol := VBoxContainer.new()
+	pickcol.add_theme_constant_override("separation", 12)
+	av.add_child(pickcol)
 
+	var stepcc := CenterContainer.new()
+	pickcol.add_child(stepcc)
 	var step := PanelContainer.new()
 	var stsb := UI.sb(UI.PANEL, UI.EDGE, 14, 2)
-	stsb.content_margin_top = 4
-	stsb.content_margin_bottom = 4
+	stsb.content_margin_top = 6
+	stsb.content_margin_bottom = 6
 	step.add_theme_stylebox_override("panel", stsb)
-	pickrow.add_child(step)
+	stepcc.add_child(step)
 	var sh := HBoxContainer.new()
-	sh.add_theme_constant_override("separation", 2)
+	sh.add_theme_constant_override("separation", 4)
 	step.add_child(sh)
 	var minus := _step_btn("−")
 	minus.pressed.connect(func() -> void: _set_qty(-1))
 	sh.add_child(minus)
-	qty_lbl = UI.label("1", 20, UI.INK, 700, true)
+	qty_lbl = UI.label("1", 30, UI.INK, 700, true)
 	qty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	qty_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	qty_lbl.custom_minimum_size = Vector2(46, 42)
+	qty_lbl.custom_minimum_size = Vector2(66, 60)
 	sh.add_child(qty_lbl)
 	var plus := _step_btn("+")
 	plus.pressed.connect(func() -> void: _set_qty(1))
 	sh.add_child(plus)
 
+	var facecc := CenterContainer.new()
+	pickcol.add_child(facecc)
 	var face_row := HBoxContainer.new()
 	face_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	face_row.add_theme_constant_override("separation", 6)
-	pickrow.add_child(face_row)
+	face_row.add_theme_constant_override("separation", 10)
+	facecc.add_child(face_row)
 	for v in 6:
-		var ic := UI.DieIcon.new(v + 1, 48)
-		ic.pivot_offset = Vector2(24, 24)
+		var ic := UI.DieIcon.new(v + 1, 60)
+		ic.pivot_offset = Vector2(30, 30)
 		ic.mouse_filter = Control.MOUSE_FILTER_STOP
 		var face := v + 1
 		ic.gui_input.connect(func(ev: InputEvent) -> void:
