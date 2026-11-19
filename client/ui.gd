@@ -67,7 +67,12 @@ static func set_dark(b: bool, persist := true) -> void:
 static func load_theme() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("user://settings.cfg") == OK:
-		set_dark(bool(cfg.get_value("display", "dark", true)), false)
+		set_dark(bool(cfg.get_value("display", "dark", dark)), false)
+	else:
+		# Sans cfg (première install) il faut aussi APPLIQUER le défaut —
+		# sinon dark=true mais palette claire : switch sombre affiché,
+		# thème clair rendu (#18).
+		set_dark(dark, false)
 
 # ---- Audio : volume + mute persistés dans user://settings.cfg ----
 static var sfx_muted := false
