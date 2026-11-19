@@ -151,12 +151,7 @@ func _on_view(v: Dictionary) -> void:
 func _arc_angle(idx: int, total: int) -> float:
 	if total <= 1:
 		return ARC_CENTER
-	# Table pleine : arc resserré — à 5 adversaires les extrémités (et les
-	# badges mode dieu au-dessus) dépassaient du champ caméra (#20).
-	var shrink := maxf(0.0, total - 4) * 7.0
-	var left := ARC_LEFT + shrink
-	var right := ARC_RIGHT - shrink
-	return left + idx * (right - left) / float(total - 1)
+	return ARC_LEFT + idx * (ARC_RIGHT - ARC_LEFT) / float(total - 1)
 
 func _build_seats() -> void:
 	var n: int = UI.arr(view.get("players")).size()
@@ -210,20 +205,19 @@ func _build_seats() -> void:
 		# Pseudo + compteur : chip colorée + badge circulaire (comme la maquette),
 		# rendus dans un SubViewport affiché en billboard au-dessus du Mii.
 		var bdg := _seat_badge(p.get("name", "?"), p_seat)
-		# Badge resserré vers l'axe : le sprite (pseudo + rangée de dés mode
-		# dieu) des sièges extrêmes était croppé aux bords de l'écran (#20).
-		bdg.sprite.position = Vector3(clampf(pos.x, -0.85, 0.85), 1.86, pos.z)
+		bdg.sprite.position = pos + Vector3(0, 1.86, 0)
+		# Zone cliquable du badge (mode dieu : tap → modale des dés, #20).
+		bdg.hitbox.position = bdg.sprite.position
 		seat["badge"] = bdg.badge
 		seat["badge_sp"] = bdg.sprite
 		seat["chip"] = bdg.chip
-		seat["goddice"] = bdg.goddice
 
 # Chip pseudo + badge compteur affichés en 2D au-dessus du Mii :
 # un SubViewport rend un HBox [chip][badge] texturé sur un Sprite3D billboard.
 func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	var vp := SubViewport.new()
 	vp.transparent_bg = true
-	vp.size = Vector2i(320, 168) # + rangée de dés (mode dieu)
+	vp.size = Vector2i(320, 136)
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	# Badge compteur AU-DESSUS de la pill pseudo, centré.
 	var v := VBoxContainer.new()
@@ -236,13 +230,6 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	var chip := UI.player_chip(p_name, p_seat, 26)
 	chip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	v.add_child(chip)
-	# Mode dieu : les dés de l'adversaire sous son pseudo (§4.5).
-	var gdice := HBoxContainer.new()
-	gdice.alignment = BoxContainer.ALIGNMENT_CENTER
-	gdice.add_theme_constant_override("separation", 3)
-	gdice.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	gdice.visible = false
-	v.add_child(gdice)
 	vp.add_child(v)
 	add_child(vp)
 
@@ -252,7 +239,18 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 	sp.pixel_size = 0.004
 	sp.shaded = false
 	add_child(sp)
-	return {"sprite": sp, "badge": badge, "chip": chip, "goddice": gdice}
+
+	# Hitbox du badge : le tap ouvre la modale des dés révélés (#20) —
+	# le raycast la voit avant le corps du Mii (elle est au-dessus).
+	var hb := StaticBody3D.new()
+	hb.set_meta("badge", p_seat)
+	var hcol := CollisionShape3D.new()
+	var hshape := BoxShape3D.new()
+	hshape.size = Vector3(1.3, 0.7, 0.2)
+	hcol.shape = hshape
+	hb.add_child(hcol)
+	add_child(hb)
+	return {"sprite": sp, "badge": badge, "chip": chip, "hitbox": hb}
 
 # ---- Rafraîchissement depuis le snapshot ----
 
@@ -302,27 +300,13 @@ func _update_players() -> void:
 			seat["badge_sp"].visible = not eliminated
 		if seat.has("mii"):
 			seat["mii"].visible = not eliminated # éliminé : le Mii quitte la table
-		if seat.has("goddice"):
-			var gdice: HBoxContainer = seat["goddice"]
-			# Mode dieu : tous les dés de l'adversaire (§4.5). Sinon, la
-			# règle « Dé public » expose pub_dice à toute la table (§1.5).
-			var vals := UI.arr(p.get("dice"))
-			var god_view: bool = view.get("god", false) and not vals.is_empty()
-			if not god_view:
-				vals = UI.arr(p.get("pub_dice"))
-			gdice.visible = god_view or not vals.is_empty()
-			if gdice.visible:
-				if gdice.get_child_count() != vals.size():
-					for c in gdice.get_children():
-						c.queue_free()
-					for v in vals:
-						gdice.add_child(UI.DieIcon.new(int(v), 26))
-				else:
-					for j in vals.size():
-						var di: UI.DieIcon = gdice.get_child(j)
-						if di.value != int(vals[j]):
-							di.value = int(vals[j])
-							di.queue_redraw()
+		# Dés révélés — mode dieu : tout l'adversaire (§4.5) ; sinon la
+		# règle « Dé public » expose pub_dice (§1.5). Affichés en modale au
+		# tap sur le badge, plus en permanence au-dessus du Mii (#20).
+		var vals := UI.arr(p.get("dice"))
+		if vals.is_empty() or not bool(view.get("god", false)):
+			vals = UI.arr(p.get("pub_dice"))
+		seat["dice_vals"] = vals
 
 # Ma main : rangée d'icônes 2D dans le HUD (plus de dés 3D sur la table).
 # Les dés pop en cascade quand la main change (lancer, perte, gain).
@@ -931,11 +915,54 @@ func _unhandled_input(event: InputEvent) -> void:
 	var to := from + cam.project_ray_normal(pos) * 10.0
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if hit.is_empty() or not hit.collider.has_meta("mii"):
+	if hit.is_empty():
+		return
+	if hit.collider.has_meta("badge"):
+		_show_seat_dice(int(hit.collider.get_meta("badge")))
+		return
+	if not hit.collider.has_meta("mii"):
 		return
 	var mii: Node3D = hit.collider.get_meta("mii")
 	Net.emote(mii.get_meta("seat"), cur_item)  # le serveur diffuse aux autres
 	_throw_item(mii, cur_item)                 # anim optimiste locale
+
+# Dés révélés d'un siège (mode dieu §4.5 / Dé public §1.5) : modale au
+# tap sur son badge — refermée par un tap n'importe où (#20).
+func _show_seat_dice(p_seat: int) -> void:
+	var vals: Array = seats.get(p_seat, {}).get("dice_vals", [])
+	if vals.is_empty():
+		return
+	var scrim := ColorRect.new()
+	scrim.color = Color(0, 0, 0, 0.5)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(scrim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE # les taps passent au scrim
+	scrim.add_child(cc)
+	var p := UI.panel()
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cc.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 16)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(v)
+	var ttl := UI.player_chip(_player_name(p_seat), p_seat, 24)
+	ttl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	v.add_child(ttl)
+	var drow := HBoxContainer.new()
+	drow.alignment = BoxContainer.ALIGNMENT_CENTER
+	drow.add_theme_constant_override("separation", 12)
+	drow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(drow)
+	for dv in vals:
+		var di := UI.DieIcon.new(int(dv), 56)
+		di.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		drow.add_child(di)
+	scrim.gui_input.connect(func(ev: InputEvent) -> void:
+		if UI.tap(ev):
+			scrim.queue_free())
+	UI.pop_in(p)
 
 func _on_notice(d: Dictionary) -> void:
 	match d.get("kind", ""):
