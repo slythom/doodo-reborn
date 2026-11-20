@@ -3,6 +3,18 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Ajouté
+- **#45** — révélation : la mention « X perd/regagne un dé » est agrandie
+  (30 px), colorée (rouge/vert) et clignote façon néon jusqu'à la
+  fermeture.
+
+### Corrigé
+- **#46** — révélation : `de-perdu.mp3` joue désormais pour tous au
+  moment où le compteur vert se termine, au lieu d'arriver dès
+  l'événement reçu (côté perdant seulement).
+
 ## [v0.10.6] — 2026-11-20
 
 ### Ajouté
