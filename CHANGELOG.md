@@ -3,6 +3,14 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Corrigé
+- **#21** — à 2 adversaires, ils étaient placés aux extrémités de
+  l'arc (215°/325°) et sortaient du champ. L'arc est maintenant
+  proportionnel (~30° par siège, centré) ; il n'atteint sa pleine
+  largeur qu'à partir de 5 adversaires.
+
 ## [v0.10.2] — 2026-11-20
 
 ### Modifié

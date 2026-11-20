@@ -153,7 +153,10 @@ func _on_view(v: Dictionary) -> void:
 func _arc_angle(idx: int, total: int) -> float:
 	if total <= 1:
 		return ARC_CENTER
-	return ARC_LEFT + idx * (ARC_RIGHT - ARC_LEFT) / float(total - 1)
+	# ~30° d'écart par siège, centré : à 2 adversaires, les extrémités
+	# de l'arc complet (215°/325°) sortaient du champ (#21).
+	var spread := minf(ARC_RIGHT - ARC_LEFT, float(total - 1) * 30.0)
+	return ARC_CENTER - spread / 2.0 + idx * spread / float(total - 1)
 
 func _build_seats() -> void:
 	var n: int = UI.arr(view.get("players")).size()
