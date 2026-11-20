@@ -62,6 +62,7 @@ var _turn_total := 15.0     # durée de référence pour le ratio de la jauge
 var _shake := 0.0           # amplitude initiale du shake caméra (#42)
 var _shake_t := -1.0        # temps depuis le déclenchement, < 0 = inactif
 var _reveal_done_at := 0.0  # fin du comptage vert (unix s) — timing sfx (#46)
+var _verdict_flash: Tween   # flash néon de « X perd/regagne un dé » (#45)
 var item_icons := {}        # kind -> UI.ItemIcon (sélecteur de projectile)
 var status_gen := 0
 var _turn_tween: Tween
@@ -669,12 +670,11 @@ func _on_events(events: Array) -> void:
 							_seq_sfx("de-perdu"))
 				else:
 					_seq_sfx("de-perdu")
-				# Verdict affiché dans l'overlay de révélation encore ouvert.
 				if reveal_panel.visible:
-					reveal_verdict_sub.text = "%s perd un dé" % _player_name(e.get("player", -1))
+					_verdict_flash_sub("%s perd un dé" % _player_name(e.get("player", -1)), UI.RED)
 			"die_gained":
 				if reveal_panel.visible:
-					reveal_verdict_sub.text = "%s regagne un dé" % _player_name(e.get("player", -1))
+					_verdict_flash_sub("%s regagne un dé" % _player_name(e.get("player", -1)), UI.GREEN)
 			"steal_pending":
 				# Calzone (§1.5) : le voleur passe à l'écran de choix ;
 				# les autres gardent la révélation (le jeu est suspendu).
@@ -753,6 +753,23 @@ func _set_status(t: String) -> void:
 
 # ---- Révélation : scrim laiteux, titre pop, comptage animé (specs §7) ----
 
+# « X perd/regagne un dé » (#45) : agrandi, coloré (rouge/vert), flash
+# néon en boucle jusqu'à la fermeture de la révélation.
+func _verdict_flash_sub(txt: String, col: Color) -> void:
+	if _verdict_flash:
+		_verdict_flash.kill()
+	reveal_verdict_sub.text = txt
+	reveal_verdict_sub.add_theme_font_size_override("font_size", 30)
+	reveal_verdict_sub.add_theme_color_override("font_color", col)
+	reveal_verdict_sub.add_theme_color_override("font_outline_color", col.darkened(0.55))
+	reveal_verdict_sub.add_theme_constant_override("outline_size", 8)
+	reveal_verdict_sub.add_theme_color_override("font_shadow_color", Color(col, 0.5))
+	reveal_verdict_sub.add_theme_constant_override("shadow_offset_y", 3)
+	reveal_verdict_sub.modulate.a = 1.0
+	_verdict_flash = reveal_verdict_sub.create_tween().set_loops()
+	_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 0.25, 0.14)
+	_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 1.0, 0.16)
+
 func _show_reveal(e: Dictionary) -> void:
 	reveal_gen += 1
 	var gen := reveal_gen
@@ -828,6 +845,7 @@ func _show_reveal(e: Dictionary) -> void:
 	reveal_count.text = "0"
 	reveal_verdict.text = ""
 	reveal_verdict_sub.text = ""
+	reveal_verdict_sub.modulate.a = 1.0
 	reveal_fill.offset_right = 0.0
 	reveal_panel.modulate.a = 0.0
 	reveal_panel.visible = true
@@ -897,6 +915,9 @@ func _show_reveal(e: Dictionary) -> void:
 func _hide_reveal() -> void:
 	reveal_gen += 1
 	_reveal_done_at = 0.0
+	if _verdict_flash:
+		_verdict_flash.kill()
+		_verdict_flash = null
 	if reveal_tween:
 		reveal_tween.kill()
 		reveal_tween = null
