@@ -95,6 +95,59 @@ static func load_audio() -> void:
 		set_audio(bool(cfg.get_value("audio", "muted", false)),
 			float(cfg.get_value("audio", "volume", 0.8)), false)
 
+# ---- Effet CRT : scanlines + vignette, persisté dans [display] (#36) ----
+# ON par défaut — le look arcade est l'identité visuelle ; opt-out possible.
+static var crt := true
+
+static func set_crt(b: bool, persist := true) -> void:
+	crt = b
+	if persist:
+		var cfg := ConfigFile.new()
+		cfg.load("user://settings.cfg")
+		cfg.set_value("display", "crt", crt)
+		cfg.save("user://settings.cfg")
+
+static func load_crt() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		set_crt(bool(cfg.get_value("display", "crt", true)), false)
+	else:
+		# Sans cfg : appliquer le défaut, pas seulement le flag (cf. #18).
+		set_crt(crt, false)
+
+const CRT_SHADER := """
+shader_type canvas_item;
+void fragment() {
+	// Scanlines horizontales + vignette douce — look borne d'arcade.
+	float scan = 0.07 * (0.5 + 0.5 * sin(UV.y * 750.0));
+	vec2 d = UV - vec2(0.5);
+	float vig = smoothstep(0.30, 0.75, dot(d, d) * 2.0);
+	COLOR = vec4(0.0, 0.0, 0.0, scan + vig * 0.30);
+}
+"""
+
+# Quad plein écran au-dessus de tout (layer 10), transparent aux taps.
+# Idempotent : le rebuild de scène recrée le layer proprement.
+static func apply_crt(root: Node) -> void:
+	var old := root.get_node_or_null("CRTLayer")
+	if old:
+		old.queue_free()
+	if not crt:
+		return
+	var layer := CanvasLayer.new()
+	layer.name = "CRTLayer"
+	layer.layer = 10
+	root.add_child(layer)
+	var r := ColorRect.new()
+	r.set_anchors_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = CRT_SHADER
+	mat.shader = sh
+	r.material = mat
+	layer.add_child(r)
+
 static func sfx_db() -> float:
 	return linear_to_db(maxf(sfx_volume, 0.001))
 

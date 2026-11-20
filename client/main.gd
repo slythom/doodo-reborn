@@ -111,6 +111,7 @@ func _mesh(mesh: PrimitiveMesh, color: Color, pos: Vector3, roughness := 0.8, em
 func _ready() -> void:
 	UI.load_theme()
 	UI.load_audio()
+	UI.load_crt()
 	randomize()
 	for kind in ITEMS:
 		splat_texs[kind] = _make_splat_texture(ITEMS[kind].splat)
@@ -118,6 +119,7 @@ func _ready() -> void:
 	view = Net.view
 	_build_scene()
 	_hud()
+	UI.apply_crt(self)
 	_build_seats()
 	_refresh()
 	Net.room_state.connect(_on_view)

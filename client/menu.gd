@@ -51,6 +51,7 @@ static var _e2e_started := false
 func _ready() -> void:
 	UI.load_theme()
 	UI.load_audio()
+	UI.load_crt()
 	_build_ui()
 	Net.connection_opened.connect(func() -> void:
 		var pseudo := _name_edit.text.strip_edges()
@@ -281,6 +282,22 @@ func _build_ui() -> void:
 		UI.set_dark(on)
 		_rebuild())
 	theme_row.add_child(sw)
+
+	# Effet CRT : scanlines + vignette rétro (#36), persisté comme le thème.
+	var crt_row := HBoxContainer.new()
+	crt_row.add_theme_constant_override("separation", 10)
+	cv.add_child(crt_row)
+	var cl := UI.label("Effet CRT", 20, UI.INK, 700)
+	cl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	crt_row.add_child(cl)
+	var crt_spacer := Control.new()
+	crt_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	crt_row.add_child(crt_spacer)
+	var crt_sw := UI.ThemeSwitch.new(UI.crt)
+	crt_sw.toggled.connect(func(on: bool) -> void:
+		UI.set_crt(on)
+		_rebuild())
+	crt_row.add_child(crt_sw)
 
 	# Audio : volume + mute des SFX, persistés (§4.3).
 	var audio_row := HBoxContainer.new()
@@ -555,7 +572,7 @@ func _build_ui() -> void:
 	add_child(_cursor)
 	if not get_viewport().gui_focus_changed.is_connected(_move_cursor):
 		get_viewport().gui_focus_changed.connect(_move_cursor)
-	add_child(UI.Scanlines.new()) # balayage CRT — toujours au-dessus
+	UI.apply_crt(self) # balayage CRT + vignette — au-dessus, désactivable (#36)
 
 # Ligne « libellé + liste déroulante » des options de table — valeurs en
 # metadata d'item, comme le sélecteur de décor.
