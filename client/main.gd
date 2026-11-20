@@ -1040,7 +1040,10 @@ func _on_notice(d: Dictionary) -> void:
 				if seats.has(seat) and seats[seat].has("mii"):
 					_throw_item(seats[seat]["mii"], d.get("text"), int(d.get("from_seat", -1)))
 		"chat":
-			_set_status("%s : %s" % [d.get("from", "?"), UI.chat_text(d.get("text", ""))])
+			var from_name := String(d.get("from", "?"))
+			var chat_txt := String(UI.chat_text(d.get("text", "")))
+			_set_status("%s : %s" % [from_name, chat_txt])
+			_chat_bubble(from_name, chat_txt)
 
 # ---- HUD (charte Wii — portrait uniquement) ----
 
@@ -1499,6 +1502,38 @@ func _night_bg(parent: Control) -> void:
 	var d := UI.Dots.new()
 	d.col = Color(1, 1, 1, 0.06)
 	parent.add_child(d)
+
+# Bulle de chat au-dessus du Mii de l'émetteur (#39) — Label3D billboard,
+# visible ~2,5 s puis fondu. Rien pour soi : pas de Mii en vue subjective.
+func _chat_bubble(from_name: String, text: String) -> void:
+	if from_name == Net.last_name or text.is_empty():
+		return
+	for p in UI.arr(view.get("players")):
+		var seat_no := int(p.get("seat", -1))
+		if p.get("name") != from_name or not seats.has(seat_no) \
+				or not seats[seat_no].has("mii"):
+			continue
+		var seat: Dictionary = seats[seat_no]
+		if seat.has("bubble") and is_instance_valid(seat["bubble"]):
+			seat["bubble"].queue_free()
+		var mii: Node3D = seat["mii"]
+		var lbl := Label3D.new()
+		lbl.text = text
+		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		lbl.pixel_size = 0.004
+		lbl.font_size = 56
+		lbl.outline_size = 14
+		lbl.no_depth_test = true # lisible même derrière le décor
+		lbl.modulate = Color.WHITE
+		lbl.outline_modulate = Color(0, 0, 0, 0.85)
+		lbl.position = mii.position + Vector3(0, 2.4, 0)
+		add_child(lbl)
+		seat["bubble"] = lbl
+		var tw := lbl.create_tween()
+		tw.tween_interval(2.2)
+		tw.tween_property(lbl, "transparency", 1.0, 0.5)
+		tw.tween_callback(lbl.queue_free)
+		return
 
 func _process(delta: float) -> void:
 	sway_t += delta
