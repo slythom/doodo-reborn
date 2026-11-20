@@ -3,6 +3,21 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Ajouté
+- **#36** — effet CRT (scanlines + vignette) partout, menu et partie,
+  désactivable dans les options (activé par défaut).
+- **#38** — attract mode sur l'accueil : dés flottants en fond et
+  flicker néon sur le titre.
+- **#39** — bulles de chat au-dessus du Mii de l'émetteur (~2,5 s),
+  en plus du toast existant.
+- **#40** — safe-area Android : le HUD évite l'encoche et la barre
+  gestuelle.
+- **#41** — jauge de timer pulsante en rouge sous les 5 s restantes.
+- **#42** — micro-shake d'écran à la révélation d'un dudo/calza et
+  quand tu perds un dé.
+
 ## [v0.10.5] — 2026-11-20
 
 ### Modifié
