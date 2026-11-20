@@ -10,6 +10,9 @@
 - Bump de version : `config/version="x.y.z-N"` dans `client/project.godot`
   et `version/code=N` dans `client/export_presets.cfg`. La version
   affichée in-app vient de `project.godot`.
+- Schéma de version : `x.y.z` = **prochain tag en préparation**,
+  `-N` = compteur de build global. Ex. builds `0.10.4-17` → tag
+  `v0.10.4` → builds suivants `0.10.5-18`…
 
 ## Build APK
 
