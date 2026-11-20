@@ -3,7 +3,7 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
-## [Non publié]
+## [v0.10.3] — 2026-11-20
 
 ### Corrigé
 - **#21** — à 2 adversaires, ils étaient placés aux extrémités de
