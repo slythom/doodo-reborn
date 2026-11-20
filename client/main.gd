@@ -469,6 +469,12 @@ func _update_bid() -> void:
 	if sig != _last_bid_sig:
 		_last_bid_sig = sig
 		UI.punch(bid_pill, 0.1)
+		# #15 : le stepper propose la quantité de l'enchère en cours (« 8 »
+		# après un 8×5) au lieu de repartir à 1 — la face reste au choix
+		# de l'utilisateur. Nouvelle manche sans enchère → retour à 1.
+		qty_val = maxi(1, int(b.get("quantity", 0))) if view.get("has_bid", false) else 1
+		if is_instance_valid(qty_lbl):
+			qty_lbl.text = str(qty_val)
 	for c in bid_row.get_children():
 		c.queue_free()
 	if view.get("has_bid", false):

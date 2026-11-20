@@ -3,6 +3,14 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Modifié
+- **#15** — enchère : le stepper de quantité propose par défaut la
+  quantité de l'enchère en cours (« 8 » après un 8×5) au lieu de
+  repartir à 1. La face choisie reste inchangée ; nouvelle manche
+  sans enchère → retour à 1.
+
 ## [v0.10.4] — 2026-11-20
 
 ### Ajouté
