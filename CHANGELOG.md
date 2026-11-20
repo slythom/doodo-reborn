@@ -3,6 +3,16 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Ajouté
+- **#22** — jauge de tour : barre horizontale au-dessus du panneau
+  d'action, à gauche de tes dés, qui se vide de droite à gauche pendant
+  le temps imparti à ton action (enchère ou choix de victime Calzone).
+  Remplissage bleu clair, visible seulement pendant ton tour ; le
+  serveur envoie la durée résiduelle (`turn_remaining_ms`), recalée à
+  chaque snapshot — insensible au décalage d'horloge.
+
 ## [v0.10.3] — 2026-11-20
 
 ### Corrigé

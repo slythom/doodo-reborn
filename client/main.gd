@@ -55,6 +55,10 @@ var steal_panel: Control # écran de vol — règle Calzone (§1.5)
 var steal_box: VBoxContainer
 var steal_row: HBoxContainer # chips des victimes potentielles
 var action_bar: PanelContainer
+var timer_gauge: Panel      # jauge de tour verticale (#22)
+var timer_fill: ColorRect   # remplissage de la jauge
+var _turn_deadline := 0.0   # échéance locale (unix s), 0 = pas de timer
+var _turn_total := 15.0     # durée de référence pour le ratio de la jauge
 var item_icons := {}        # kind -> UI.ItemIcon (sélecteur de projectile)
 var status_gen := 0
 var _turn_tween: Tween
@@ -338,6 +342,8 @@ func _update_my_dice() -> void:
 			var t := di.create_tween()
 			t.tween_property(di, "scale", Vector2.ONE, 0.3).set_delay(i * 0.05) \
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# La borne droite de la jauge dépend de la largeur de la main (#22).
+	_place_hand.call_deferred()
 
 # Barre mode dieu : visible tant que la manche n'a pas d'enchère posée et
 # que le tirage n'a pas été confirmé. Reconstruite à chaque nouvelle manche
@@ -586,6 +592,16 @@ func _update_actions() -> void:
 	var spectator: bool = view.get("your_seat", -1) < 0
 	var steal_pending: int = int(view.get("steal_pending", -1))
 	var must_steal: bool = steal_pending == view.get("your_seat", -2)
+	# Jauge de tour (#22) : échéance locale recalée sur la durée résiduelle
+	# du serveur — à chaque snapshot, aucune dérive d'horloge possible.
+	var rem_ms: int = int(view.get("turn_remaining_ms", 0))
+	var timer_secs: float = float(UI.obj(view.get("options")).get("timer_seconds", 0))
+	var my_action: bool = int(view.get("turn", -1)) == int(view.get("your_seat", -2)) or must_steal
+	if my_action and rem_ms > 0:
+		_turn_total = timer_secs if timer_secs > 0.0 else 15.0 # défaut serveur du choix de victime
+		_turn_deadline = Time.get_unix_time_from_system() + rem_ms / 1000.0
+	else:
+		_turn_deadline = 0.0
 	# Pendant un vol Calzone, la barre d'enchères est masquée : le voleur a
 	# son écran de choix, les autres (joueurs et spectateurs) attendent.
 	if steal_pending >= 0 and not must_steal:
@@ -948,6 +964,27 @@ func _place_hand() -> void:
 		clearance += int(action_bar.size.y)
 	hand_cc.offset_bottom = -clearance
 	hand_cc.offset_top = -clearance - 56
+	# Jauge horizontale (#22) : même bande que la main, centrée dessus,
+	# bornée pour ne pas chevaucher les dés centrés.
+	if is_instance_valid(timer_gauge) and is_instance_valid(my_dice_box):
+		var center := clearance + 28.0
+		timer_gauge.offset_top = -center - 11.0
+		timer_gauge.offset_bottom = -center + 11.0
+		var dice_left: float = get_viewport().get_visible_rect().size.x / 2.0 - my_dice_box.size.x / 2.0
+		timer_gauge.offset_right = clampf(dice_left - 16.0, 72.0, 192.0)
+
+# Jauge de tour (#22) : se vide de droite à gauche, bleu clair.
+func _update_timer_gauge() -> void:
+	if not is_instance_valid(timer_gauge):
+		return
+	var on: bool = _turn_deadline > 0.0 and view.get("state") == "playing" \
+		and not bool(view.get("over", false))
+	timer_gauge.visible = on
+	if not on:
+		return
+	var rem: float = _turn_deadline - Time.get_unix_time_from_system()
+	var ratio: float = clampf(rem / maxf(_turn_total, 0.001), 0.0, 1.0)
+	timer_fill.anchor_right = ratio
 
 # Dés révélés d'un siège (mode dieu §4.5 / Dé public §1.5) : modale au
 # tap sur son badge — refermée par un tap n'importe où (#20).
@@ -1103,6 +1140,27 @@ func _hud() -> void:
 		item_icons[kind] = ic
 		ib.add_child(ic)
 	_set_item("tomato")
+
+	# Jauge de tour (#22) : barre horizontale au-dessus du panneau d'action
+	# (alignée sur son bord gauche), à gauche de ma main — se vide de
+	# droite à gauche pendant MON tour, invisible sinon.
+	timer_gauge = Panel.new()
+	timer_gauge.add_theme_stylebox_override("panel", UI.sb(Color(0, 0, 0, 0.5), UI.EDGE, 8, 2))
+	timer_gauge.anchor_left = 0.0
+	timer_gauge.anchor_top = 1.0
+	timer_gauge.anchor_right = 0.0
+	timer_gauge.anchor_bottom = 1.0
+	timer_gauge.offset_left = 12 # alignée sur le bord gauche du panneau
+	timer_gauge.visible = false
+	layer.add_child(timer_gauge)
+	timer_fill = ColorRect.new()
+	timer_fill.color = UI.BLUE_HI
+	timer_fill.anchor_bottom = 1.0
+	timer_fill.offset_left = 5
+	timer_fill.offset_top = 5
+	timer_fill.offset_right = -5
+	timer_fill.offset_bottom = -5
+	timer_gauge.add_child(timer_fill)
 
 	# Panneau d'action en bas : hug content vers le haut, coins arrondis en
 	# haut seulement — effet « bottom sheet » mobile.
@@ -1439,6 +1497,7 @@ func _process(delta: float) -> void:
 	sway_t += delta
 	cam.rotation.y += sin(sway_t * 0.6) * 0.00005
 	cam.rotation.x += cos(sway_t * 0.45) * 0.00004
+	_update_timer_gauge()
 
 # ---- Scène : décor, table, caméra, tomate (identiques au proto) ----
 

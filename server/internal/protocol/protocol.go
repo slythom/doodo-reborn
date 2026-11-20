@@ -147,6 +147,9 @@ type View struct {
 	Creator      bool     `json:"creator,omitempty"` // tu es le créateur de la table
 	God          bool     `json:"god,omitempty"`     // tu es le créateur en mode dieu (§4.5)
 	StealPending int      `json:"steal_pending"`     // calzeur devant choisir sa victime, -1 sinon (§1.5)
+	// Millisecondes restantes au joueur de tour / choisissant sa victime.
+	// Durée résiduelle (pas timestamp) : insensible au décalage d'horloge.
+	TurnRemainingMs int64 `json:"turn_remaining_ms,omitempty"`
 }
 
 type Events struct {

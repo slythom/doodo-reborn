@@ -80,6 +80,9 @@ type Room struct {
 	timerGen  int
 	cancelTmr interface{ Stop() bool }
 	botSeq    int
+	// Échéance du timer de tour armé (humain uniquement) — exposée en
+	// durée résiduelle dans la vue pour la jauge client (#22).
+	turnDeadline time.Time
 }
 
 func New(code string, creator *Member, opts protocol.Options, rng *rand.Rand, emit EmitFunc, tf TimerFunc) *Room {
@@ -272,8 +275,8 @@ func (r *Room) Launch(byID string) error {
 	}
 	r.game = g
 	r.State = "playing"
-	r.broadcastLocked()
 	r.armTurnLocked(0)
+	r.broadcastLocked() // après l'armement : la vue porte la deadline (#22)
 	return nil
 }
 
@@ -348,12 +351,14 @@ func (r *Room) afterGameEventsLocked(evs []game.Event) {
 		}
 	}
 	r.emitLocked(nil, protocol.Envelope{Type: "events", Data: protocol.Events{Events: evs}})
-	r.broadcastLocked()
 	if r.game.Over {
 		r.State = "finished"
 		r.stopTimerLocked()
+		r.broadcastLocked()
 		return
 	}
+	// Armement AVANT le broadcast : la vue inclut la deadline du timer
+	// de tour (jauge client, #22).
 	if r.game.PendingSteal >= 0 {
 		r.armStealLocked(0) // vol en attente : le voleur choisit sa victime
 	} else if reveal {
@@ -361,6 +366,7 @@ func (r *Room) afterGameEventsLocked(evs []game.Event) {
 	} else {
 		r.armTurnLocked(0)
 	}
+	r.broadcastLocked()
 }
 
 // ---- Présence ----
@@ -691,6 +697,7 @@ func (r *Room) armTurnLocked(extra time.Duration) {
 	}
 	if r.Opts.TimerSeconds > 0 {
 		d := time.Duration(r.Opts.TimerSeconds)*time.Second + extra
+		r.turnDeadline = time.Now().Add(d)
 		r.timer = r.newTimer(d, func() { r.timeout(gen, seat) })
 	}
 }
@@ -701,6 +708,7 @@ func (r *Room) stopTimerLocked() {
 		r.timer.Stop()
 		r.timer = nil
 	}
+	r.turnDeadline = time.Time{}
 }
 
 // armStealLocked programme le choix de victime d'un vol de dé (règle
@@ -726,6 +734,7 @@ func (r *Room) armStealLocked(extra time.Duration) {
 	if r.Opts.TimerSeconds > 0 {
 		d = time.Duration(r.Opts.TimerSeconds)*time.Second + extra
 	}
+	r.turnDeadline = time.Now().Add(d)
 	r.timer = r.newTimer(d, func() { r.stealTimeout(gen, seat) })
 }
 
@@ -862,6 +871,13 @@ func (r *Room) viewForLocked(m *Member) *protocol.View {
 	}
 	if r.game != nil && r.game.Over {
 		v.Ranking = r.ranking
+	}
+	// Jauge de tour côté client (#22) : durée résiduelle, pas timestamp —
+	// aucun problème de décalage d'horloge entre serveur et mobile.
+	if !r.turnDeadline.IsZero() {
+		if rem := time.Until(r.turnDeadline).Milliseconds(); rem > 0 {
+			v.TurnRemainingMs = rem
+		}
 	}
 	return v
 }
