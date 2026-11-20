@@ -152,6 +152,20 @@ func _on_view(v: Dictionary) -> void:
 	if st == "lobby" or st == "cancelled": # revanche ou annulation → retour menu
 		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn")
 		return
+	# Jauge de tour (#22) : échéance locale recalée sur la durée résiduelle
+	# du serveur — UNIQUEMENT sur un nouveau snapshot. _update_actions
+	# est aussi appelé par les interactions locales (stepper, faces) et
+	# réutilisait le rem_ms périmé : la jauge repartait pleine (#41).
+	var rem_ms: int = int(view.get("turn_remaining_ms", 0))
+	var timer_secs: float = float(UI.obj(view.get("options")).get("timer_seconds", 0))
+	var steal_pending: int = int(view.get("steal_pending", -1))
+	var my_action: bool = int(view.get("turn", -1)) == int(view.get("your_seat", -2)) \
+		or steal_pending == view.get("your_seat", -2)
+	if my_action and rem_ms > 0:
+		_turn_total = timer_secs if timer_secs > 0.0 else 15.0 # défaut serveur du choix de victime
+		_turn_deadline = Time.get_unix_time_from_system() + rem_ms / 1000.0
+	else:
+		_turn_deadline = 0.0
 	_refresh()
 
 # ---- Construction des sièges depuis le snapshot ----
@@ -600,16 +614,6 @@ func _update_actions() -> void:
 	var spectator: bool = view.get("your_seat", -1) < 0
 	var steal_pending: int = int(view.get("steal_pending", -1))
 	var must_steal: bool = steal_pending == view.get("your_seat", -2)
-	# Jauge de tour (#22) : échéance locale recalée sur la durée résiduelle
-	# du serveur — à chaque snapshot, aucune dérive d'horloge possible.
-	var rem_ms: int = int(view.get("turn_remaining_ms", 0))
-	var timer_secs: float = float(UI.obj(view.get("options")).get("timer_seconds", 0))
-	var my_action: bool = int(view.get("turn", -1)) == int(view.get("your_seat", -2)) or must_steal
-	if my_action and rem_ms > 0:
-		_turn_total = timer_secs if timer_secs > 0.0 else 15.0 # défaut serveur du choix de victime
-		_turn_deadline = Time.get_unix_time_from_system() + rem_ms / 1000.0
-	else:
-		_turn_deadline = 0.0
 	# Pendant un vol Calzone, la barre d'enchères est masquée : le voleur a
 	# son écran de choix, les autres (joueurs et spectateurs) attendent.
 	if steal_pending >= 0 and not must_steal:
