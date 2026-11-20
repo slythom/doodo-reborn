@@ -61,6 +61,7 @@ var _turn_deadline := 0.0   # échéance locale (unix s), 0 = pas de timer
 var _turn_total := 15.0     # durée de référence pour le ratio de la jauge
 var _shake := 0.0           # amplitude initiale du shake caméra (#42)
 var _shake_t := -1.0        # temps depuis le déclenchement, < 0 = inactif
+var _reveal_done_at := 0.0  # fin du comptage vert (unix s) — timing sfx (#46)
 var item_icons := {}        # kind -> UI.ItemIcon (sélecteur de projectile)
 var status_gen := 0
 var _turn_tween: Tween
@@ -658,6 +659,15 @@ func _on_events(events: Array) -> void:
 				if e.get("player", -1) == view.get("your_seat", -1):
 					_shake = 0.18 # c'est TON dé (#42)
 					_shake_t = 0.0
+				# SFX au terme du comptage vert (#46), pas à la réception
+				# de l'événement — joué pour tous à l'écran de révélation.
+				if reveal_panel.visible and _reveal_done_at > 0.0:
+					var d_sfx: float = maxf(0.0, _reveal_done_at - Time.get_unix_time_from_system())
+					var gen_sfx := reveal_gen
+					get_tree().create_timer(d_sfx).timeout.connect(func() -> void:
+						if reveal_panel.visible and gen_sfx == reveal_gen:
+							_seq_sfx("de-perdu"))
+				else:
 					_seq_sfx("de-perdu")
 				# Verdict affiché dans l'overlay de révélation encore ouvert.
 				if reveal_panel.visible:
@@ -861,6 +871,7 @@ func _show_reveal(e: Dictionary) -> void:
 			reveal_count.scale = Vector2(1.3, 1.3)
 			var pt := create_tween()
 			pt.tween_property(reveal_count, "scale", Vector2.ONE, 0.18))
+	_reveal_done_at = Time.get_unix_time_from_system() + 0.5 + lit.size() * 0.4 + 0.3
 	get_tree().create_timer(0.5 + lit.size() * 0.4 + 0.3).timeout.connect(func() -> void:
 		if gen != reveal_gen:
 			return
@@ -885,6 +896,7 @@ func _show_reveal(e: Dictionary) -> void:
 
 func _hide_reveal() -> void:
 	reveal_gen += 1
+	_reveal_done_at = 0.0
 	if reveal_tween:
 		reveal_tween.kill()
 		reveal_tween = null
