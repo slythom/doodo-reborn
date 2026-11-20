@@ -147,6 +147,26 @@ func _build_ui() -> void:
 		orb.position = o[0]
 		add_child(orb)
 
+	# Attract mode (#38) : dés qui flottent en fond, derrière la carte.
+	var attract := Control.new()
+	attract.set_anchors_preset(Control.PRESET_FULL_RECT)
+	attract.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(attract)
+	for i in 7:
+		var d := UI.DieIcon.new(randi_range(1, 6), 46)
+		d.modulate = Color(1, 1, 1, 0.4)
+		d.pivot_offset = Vector2(23, 23)
+		d.position = Vector2(randf_range(0, 640), randf_range(0, 1200))
+		d.rotation_degrees = randf_range(0, 360)
+		attract.add_child(d)
+		var bob := d.create_tween().set_loops()
+		bob.tween_property(d, "position:y", d.position.y - 30, randf_range(1.6, 3.0)) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		bob.tween_property(d, "position:y", d.position.y + 30, randf_range(1.6, 3.0)) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		var spin := d.create_tween().set_loops()
+		spin.tween_property(d, "rotation_degrees", d.rotation_degrees + 360.0, randf_range(9.0, 16.0))
+
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
@@ -182,6 +202,13 @@ func _build_ui() -> void:
 	wob.parallel().tween_property(title, "rotation_degrees", -1.2, 1.4).set_trans(Tween.TRANS_SINE)
 	wob.tween_property(title, "scale", Vector2.ONE, 1.4).set_trans(Tween.TRANS_SINE)
 	wob.parallel().tween_property(title, "rotation_degrees", 0.0, 1.4).set_trans(Tween.TRANS_SINE)
+	# Flicker néon (#38) : micro-coupures d'alpha toutes les ~3 s.
+	var fl := title.create_tween().set_loops()
+	fl.tween_interval(2.7)
+	fl.tween_property(title, "modulate:a", 0.45, 0.05)
+	fl.tween_property(title, "modulate:a", 1.0, 0.08)
+	fl.tween_property(title, "modulate:a", 0.7, 0.04)
+	fl.tween_property(title, "modulate:a", 1.0, 0.07)
 
 	var subc := CenterContainer.new()
 	var tag := UI.pill("PERUDO EN LIGNE", Color("#D9F1FB"), UI.BLUE_DK, 13)
