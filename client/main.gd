@@ -647,11 +647,11 @@ func _on_events(events: Array) -> void:
 			"round_start":
 				_queue_sfx("dices")
 			"reveal":
-				_shake = 0.04 # verdict dudo/calza (#42)
+				_shake = 0.10 # verdict dudo/calza (#42)
 				_show_reveal(e)
 			"die_lost":
 				if e.get("player", -1) == view.get("your_seat", -1):
-					_shake = 0.06 # c'est TON dé (#42)
+					_shake = 0.16 # c'est TON dé (#42)
 					_seq_sfx("de-perdu")
 				# Verdict affiché dans l'overlay de révélation encore ouvert.
 				if reveal_panel.visible:
@@ -1565,9 +1565,9 @@ func _process(delta: float) -> void:
 	sway_t += delta
 	cam.rotation.y += sin(sway_t * 0.6) * 0.00005
 	cam.rotation.x += cos(sway_t * 0.45) * 0.00004
-	# Shake caméra (#42) : offset du frustum, décroît en ~0,3 s.
+	# Shake caméra (#42) : offset du frustum, décroît en ~0,5 s.
 	if _shake > 0.0:
-		_shake = maxf(0.0, _shake - delta * 2.2)
+		_shake = maxf(0.0, _shake - delta * 1.2)
 		cam.h_offset = randf_range(-_shake, _shake)
 		cam.v_offset = randf_range(-_shake, _shake)
 	elif cam.h_offset != 0.0:
