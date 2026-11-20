@@ -3,7 +3,7 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
-## [Non publié]
+## [v0.10.7] — 2026-11-21
 
 ### Ajouté
 - **#45** — révélation : la mention « X perd/regagne un dé » est agrandie
