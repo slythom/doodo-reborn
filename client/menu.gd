@@ -320,7 +320,7 @@ func _build_ui() -> void:
 	var crt_spacer := Control.new()
 	crt_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	crt_row.add_child(crt_spacer)
-	var crt_sw := UI.ThemeSwitch.new(UI.crt)
+	var crt_sw := UI.ThemeSwitch.new(UI.crt, false, true) # affiche ON/OFF, pas l'icône lune
 	crt_sw.toggled.connect(func(on: bool) -> void:
 		UI.set_crt(on)
 		_rebuild())
