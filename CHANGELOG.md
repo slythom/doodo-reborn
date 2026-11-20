@@ -11,9 +11,9 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
   fermeture.
 
 ### Corrigé
-- **#46** — révélation : `de-perdu.mp3` joue désormais pour tous au
-  moment où le compteur vert se termine, au lieu d'arriver dès
-  l'événement reçu (côté perdant seulement).
+- **#46** — révélation : `de-perdu.mp3` joue désormais au moment où le
+  compteur vert se termine, au lieu d'arriver dès l'événement reçu
+  (toujours réservé au joueur qui perd le dé).
 
 ## [v0.10.6] — 2026-11-20
 
