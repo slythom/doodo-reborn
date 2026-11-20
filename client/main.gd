@@ -59,7 +59,8 @@ var timer_gauge: Panel      # jauge de tour verticale (#22)
 var timer_fill: ColorRect   # remplissage de la jauge
 var _turn_deadline := 0.0   # échéance locale (unix s), 0 = pas de timer
 var _turn_total := 15.0     # durée de référence pour le ratio de la jauge
-var _shake := 0.0           # amplitude du shake caméra (#42), décroît vite
+var _shake := 0.0           # amplitude initiale du shake caméra (#42)
+var _shake_t := -1.0        # temps depuis le déclenchement, < 0 = inactif
 var item_icons := {}        # kind -> UI.ItemIcon (sélecteur de projectile)
 var status_gen := 0
 var _turn_tween: Tween
@@ -647,11 +648,16 @@ func _on_events(events: Array) -> void:
 			"round_start":
 				_queue_sfx("dices")
 			"reveal":
-				_shake = 0.10 # verdict dudo/calza (#42)
+				_shake = 0.13 # verdict dudo/calza (#42)
+				_shake_t = 0.0
+				# Battement dramatique : le panneau de révélation
+				# arrive ~0,4 s après le début de la secousse.
+				await get_tree().create_timer(0.4).timeout
 				_show_reveal(e)
 			"die_lost":
 				if e.get("player", -1) == view.get("your_seat", -1):
-					_shake = 0.16 # c'est TON dé (#42)
+					_shake = 0.18 # c'est TON dé (#42)
+					_shake_t = 0.0
 					_seq_sfx("de-perdu")
 				# Verdict affiché dans l'overlay de révélation encore ouvert.
 				if reveal_panel.visible:
@@ -1565,14 +1571,17 @@ func _process(delta: float) -> void:
 	sway_t += delta
 	cam.rotation.y += sin(sway_t * 0.6) * 0.00005
 	cam.rotation.x += cos(sway_t * 0.45) * 0.00004
-	# Shake caméra (#42) : offset du frustum, décroît en ~0,5 s.
-	if _shake > 0.0:
-		_shake = maxf(0.0, _shake - delta * 1.2)
-		cam.h_offset = randf_range(-_shake, _shake)
-		cam.v_offset = randf_range(-_shake, _shake)
-	elif cam.h_offset != 0.0:
-		cam.h_offset = 0.0
-		cam.v_offset = 0.0
+	# Shake caméra (#42) : oscillation amortie ~0,9 s — une vraie
+	# secousse lisible, pas un jitter frénétique à chaque frame.
+	if _shake_t >= 0.0:
+		_shake_t += delta
+		var env: float = _shake * exp(-4.5 * _shake_t)
+		cam.h_offset = sin(_shake_t * 52.0) * env
+		cam.v_offset = cos(_shake_t * 44.0) * env * 0.7
+		if env < 0.001:
+			_shake_t = -1.0
+			cam.h_offset = 0.0
+			cam.v_offset = 0.0
 	_update_timer_gauge()
 
 # ---- Scène : décor, table, caméra, tomate (identiques au proto) ----
