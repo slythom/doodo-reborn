@@ -342,8 +342,7 @@ func _update_my_dice() -> void:
 			var t := di.create_tween()
 			t.tween_property(di, "scale", Vector2.ONE, 0.3).set_delay(i * 0.05) \
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	# La borne droite de la jauge dépend de la largeur de la main (#22).
-	_place_hand.call_deferred()
+
 
 # Barre mode dieu : visible tant que la manche n'a pas d'enchère posée et
 # que le tirage n'a pas été confirmé. Reconstruite à chaque nouvelle manche
@@ -970,14 +969,14 @@ func _place_hand() -> void:
 		clearance += int(action_bar.size.y)
 	hand_cc.offset_bottom = -clearance
 	hand_cc.offset_top = -clearance - 56
-	# Jauge horizontale (#22) : même bande que la main, centrée dessus,
-	# bornée pour ne pas chevaucher les dés centrés.
-	if is_instance_valid(timer_gauge) and is_instance_valid(my_dice_box):
+	# Jauge horizontale (#22) : même bande que la main, centrée dessus.
+	# Largeur FIXE (#24) — la mesure dynamique de la main variait en cours
+	# de partie ; 180 px reste sous les dés centrés dans tous les cas.
+	if is_instance_valid(timer_gauge):
 		var center := clearance + 28.0
 		timer_gauge.offset_top = -center - 11.0
 		timer_gauge.offset_bottom = -center + 11.0
-		var dice_left: float = get_viewport().get_visible_rect().size.x / 2.0 - my_dice_box.size.x / 2.0
-		timer_gauge.offset_right = clampf(dice_left - 16.0, 72.0, 192.0)
+		timer_gauge.offset_right = 192.0
 
 # Jauge de tour (#22) : se vide de droite à gauche, bleu clair.
 func _update_timer_gauge() -> void:

@@ -11,6 +11,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
   repartir à 1. La face choisie reste inchangée ; nouvelle manche
   sans enchère → retour à 1.
 
+### Corrigé
+- **#24** — jauge de tour : largeur fixe (180 px, comme en début de
+  partie). Elle se rétrécissait après la première manche : sa borne
+  droite était calculée d'après la largeur de la main, mesurée pendant
+  le rafraîchissement des dés.
+
 ## [v0.10.4] — 2026-11-20
 
 ### Ajouté
