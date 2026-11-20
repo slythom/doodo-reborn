@@ -992,6 +992,12 @@ func _update_timer_gauge() -> void:
 	var rem: float = _turn_deadline - Time.get_unix_time_from_system()
 	var ratio: float = clampf(rem / maxf(_turn_total, 0.001), 0.0, 1.0)
 	timer_fill.anchor_right = ratio
+	# Moins de 5 s : pulsation rouge — la tension monte (#41).
+	if rem < 5.0:
+		var pulse: float = 0.5 + 0.5 * sin(sway_t * 9.0)
+		timer_fill.color = UI.RED.lerp(Color("#FFAFAA"), pulse)
+	else:
+		timer_fill.color = UI.BLUE_HI
 
 # Dés révélés d'un siège (mode dieu §4.5 / Dé public §1.5) : modale au
 # tap sur son badge — refermée par un tap n'importe où (#20).
