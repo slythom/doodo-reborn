@@ -1052,10 +1052,23 @@ func _hud() -> void:
 	hud_layer = layer
 	add_child(layer)
 
+	# Safe-area Android (#40) : encoche en haut, barre gestuelle en bas.
+	# Conversion px physiques → unités canvas (stretch canvas_items/expand).
+	var safe_top := 0.0
+	var safe_bottom := 0.0
+	var sa := DisplayServer.get_display_safe_area()
+	var wsz := DisplayServer.window_get_size()
+	# Android seulement : ailleurs le rect est vide ou non fiable — sans
+	# cette garde le panneau saute à mi-écran.
+	if OS.get_name() == "Android" and wsz.y > 0 and sa.size.y > 0 and sa.size.y <= wsz.y:
+		var scl: float = get_viewport().get_visible_rect().size.y / float(wsz.y)
+		safe_top = clampf(float(sa.position.y), 0.0, float(wsz.y) * 0.25) * scl
+		safe_bottom = clampf(float(wsz.y - sa.end.y), 0.0, float(wsz.y) * 0.25) * scl
+
 	# Bandeau haut : titre, badge de tour, enchère en cours.
 	var top := VBoxContainer.new()
 	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top.offset_top = 12
+	top.offset_top = 12 + safe_top
 	top.alignment = BoxContainer.ALIGNMENT_CENTER
 	top.add_theme_constant_override("separation", 8)
 	layer.add_child(top)
@@ -1114,8 +1127,8 @@ func _hud() -> void:
 	leave_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	leave_btn.offset_left = -110
 	leave_btn.offset_right = -12
-	leave_btn.offset_top = 12
-	leave_btn.offset_bottom = 56
+	leave_btn.offset_top = 12 + safe_top
+	leave_btn.offset_bottom = 56 + safe_top
 	leave_btn.pressed.connect(func() -> void:
 		Net.leave()
 		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
@@ -1182,7 +1195,7 @@ func _hud() -> void:
 	action_bar.offset_left = 12
 	action_bar.offset_right = -12
 	action_bar.offset_top = -14
-	action_bar.offset_bottom = -14
+	action_bar.offset_bottom = -14 - safe_bottom
 	action_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	action_bar.resized.connect(_place_hand)
 	action_bar.visibility_changed.connect(_place_hand)
