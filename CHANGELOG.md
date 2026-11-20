@@ -18,6 +18,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **#42** — micro-shake d'écran à la révélation d'un dudo/calza et
   quand tu perds un dé.
 
+### Corrigé
+- **#41** — la jauge repartait pleine à chaque interaction locale
+  (stepper, faces) : la deadline était recalée d'après le
+  `turn_remaining_ms` périmé du dernier snapshot. Elle n'est recalée
+  qu'à l'arrivée d'un nouveau snapshot.
+
 ## [v0.10.5] — 2026-11-20
 
 ### Modifié
