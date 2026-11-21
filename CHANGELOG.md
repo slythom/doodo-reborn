@@ -3,6 +3,23 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Ajouté
+- **#26** — reconnexion immédiate au retour au premier plan : la socket
+  morte pendant la suspension Android est repartie de zéro, ou sondée
+  par un `hello` (idempotent + resync serveur).
+- **#29** — keep-alive WebSocket : ping serveur toutes les 25 s contre
+  les NAT 4G qui coupent les connexions inactives.
+- **#32** — bots humanisés : délai de réaction variable (0,8–3 s) et
+  hésitation supplémentaire avant un dudo/calza.
+- **#33** — handshake de version : le serveur envoie sa version de
+  protocole dans `welcome` ; le client avertit si elle diffère
+  (« mets à jour l'APK »).
+- **#34** — options de table persistées : les derniers réglages de
+  l'hôte (dés, timer, paco, calza, mode dieu, décor…) sont réappliqués
+  à la salle suivante.
+
 ## [v0.10.7] — 2026-11-21
 
 ### Ajouté
