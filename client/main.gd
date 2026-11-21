@@ -434,6 +434,10 @@ func _update_turn() -> void:
 		if not _turn_was_mine:
 			UI.punch(turn_lbl, 0.3)
 			_queue_sfx("notif-tour")
+			# Vibration au début de mon tour (#25) — rappelle le joueur qui
+			# ne regarde pas l'écran pendant les tours adverses.
+			if OS.get_name() == "Android":
+				Input.vibrate_handheld(80)
 		_turn_tween = turn_lbl.create_tween().set_loops()
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 0.55, 0.45)
 		_turn_tween.tween_property(turn_lbl, "modulate:a", 1.0, 0.45)
