@@ -1724,7 +1724,7 @@ var _scene: Dictionary = {} # entrée active du registry de décors
 #   build: Callable          construit décor + table + caméra
 #   char: Callable(h) -> Node3D  personnage d'un siège (défaut _char_mii)
 # `salon` est le décor par défaut et le fallback : id inconnu → salon.
-func _scenes() -> Dictionary:
+func _scene_registry() -> Dictionary:
 	return {
 		"salon": {"build": _scene_salon},
 		"cimetiere": {"build": _scene_graveyard, "char": _char_skeleton},
@@ -1760,7 +1760,7 @@ func _char_adventurer(h: int) -> Node3D:
 
 func _build_scene() -> void:
 	var id := String(UI.obj(view.get("options")).get("scene", ""))
-	var reg := _scenes()
+	var reg := _scene_registry()
 	_scene = reg.get(id, reg["salon"])
 	_scene.build.call()
 

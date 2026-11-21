@@ -40,10 +40,12 @@ static func _library() -> AnimationLibrary:
 # AABB union des meshes, transforms accumulés (instancé hors arbre → pas de
 # global_transform fiable).
 static func _measure(n: Node, t: Transform3D, aabb: AABB) -> AABB:
-	if n is Node3D:
-		t = t * (n as Node3D).transform
-		if n is MeshInstance3D:
-			aabb = aabb.merge(t * (n as MeshInstance3D).get_aabb())
+	var n3 := n as Node3D
+	if n3:
+		t = t * n3.transform
+		var mi := n as MeshInstance3D
+		if mi:
+			aabb = aabb.merge(t * mi.get_aabb())
 	for c in n.get_children():
 		aabb = _measure(c, t, aabb)
 	return aabb
@@ -59,11 +61,13 @@ static func _face_front(inst: Node3D, f: float, head_y: float, fallback: float) 
 		var e: Array = stack.pop_back()
 		var n: Node = e[0]
 		var t: Transform3D = e[1]
-		if n is Node3D:
-			t = t * (n as Node3D).transform
-		if n is MeshInstance3D:
-			for s in n.mesh.get_surface_count():
-				var verts: PackedVector3Array = n.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
+		var n3 := n as Node3D
+		if n3:
+			t = t * n3.transform
+		var mi := n as MeshInstance3D
+		if mi:
+			for s in mi.mesh.get_surface_count():
+				var verts: PackedVector3Array = mi.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]
 				for v in verts:
 					var w: Vector3 = (t * v) * f
 					if w.y > head_y - 0.02 and w.y < head_y + 0.22 and absf(w.x) < 0.14:

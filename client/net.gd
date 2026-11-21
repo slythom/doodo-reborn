@@ -103,6 +103,8 @@ func _auto_reconnect() -> void:
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_APPLICATION_RESUMED:
 		return
+	# Les print() sont voulus ici : diagnostics logcat terrain (bêta
+	# sideloadée, #26) — pas du debug oublié.
 	if is_open():
 		print("[net] resume : socket ouverte — hello de sonde")
 		hello()
@@ -114,10 +116,10 @@ func _notification(what: int) -> void:
 		connect_server()
 
 func _on_packet(txt: String) -> void:
-	var env = JSON.parse_string(txt)
+	var env: Variant = JSON.parse_string(txt)
 	if not env is Dictionary:
 		return
-	var data = env.get("data")
+	var data: Variant = env.get("data")
 	if data == null:
 		data = {}
 	match env.get("type", ""):
