@@ -93,6 +93,21 @@ func _auto_reconnect() -> void:
 	if not is_open():
 		connect_server()
 
+# Retour au premier plan (#26) : Android suspend l'app en arrière-plan et
+# la socket peut mourir sans que la fermeture ait été détectée. Si la conn
+# semble ouverte on la sonde par un hello (idempotent + resync côté
+# serveur) ; sinon on repart sur une socket neuve tout de suite.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_APPLICATION_RESUMED:
+		return
+	if is_open():
+		hello()
+	else:
+		connection_closed.emit() # « reconnexion… » sur l'écran courant
+		ws = null # un CONNECTING stale ne doit pas bloquer connect_server
+		_was_open = false
+		connect_server()
+
 func _on_packet(txt: String) -> void:
 	var env = JSON.parse_string(txt)
 	if not env is Dictionary:
