@@ -700,6 +700,17 @@ func _on_events(events: Array) -> void:
 				if reveal_panel.visible:
 					_verdict_flash_sub("%s perd un dé" % _player_name(e.get("player", -1)), UI.RED)
 			"die_gained":
+				if e.get("player", -1) == view.get("your_seat", -1):
+					# SFX réservé au joueur qui regagne un dé, au terme du
+					# comptage vert (#47) — symétrique de « de-perdu ».
+					if reveal_panel.visible and _reveal_done_at > 0.0:
+						var d_sfx: float = maxf(0.0, _reveal_done_at - Time.get_unix_time_from_system())
+						var gen_sfx := reveal_gen
+						get_tree().create_timer(d_sfx).timeout.connect(func() -> void:
+							if reveal_panel.visible and gen_sfx == reveal_gen:
+								_seq_sfx("win-dice"))
+					else:
+						_seq_sfx("win-dice")
 				if reveal_panel.visible:
 					_verdict_flash_sub("%s regagne un dé" % _player_name(e.get("player", -1)), UI.GREEN)
 			"steal_pending":
