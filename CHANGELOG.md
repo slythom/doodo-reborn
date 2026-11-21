@@ -10,7 +10,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
   morte pendant la suspension Android est repartie de zéro, ou sondée
   par un `hello` (idempotent + resync serveur).
 - **#29** — keep-alive WebSocket : ping serveur toutes les 25 s contre
-  les NAT 4G qui coupent les connexions inactives.
+  les NAT 4G qui coupent les connexions inactives (logs détaillés via
+  `DOODO_LOG_LEVEL=debug`).
 - **#32** — bots humanisés : délai de réaction variable (0,8–3 s) et
   hésitation supplémentaire avant un dudo/calza.
 - **#33** — handshake de version : le serveur envoie sa version de
