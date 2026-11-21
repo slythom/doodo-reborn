@@ -747,6 +747,48 @@ func _player_name(seat: int) -> String:
 	return _player_by_seat(seat).get("name", "?")
 
 # Toast éphémère (4 s) — génération pour invalider les timers précédents.
+func _leave() -> void:
+	Net.leave()
+	get_tree().call_deferred("change_scene_to_file", "res://menu.tscn")
+
+# Scrim de confirmation d'abandon (#28) : Rester / Quitter, tap sur le
+# fond = annuler.
+func _confirm_quit() -> void:
+	var scrim := ColorRect.new()
+	scrim.color = Color(0, 0, 0, 0.45)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(scrim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scrim.add_child(cc)
+	var p := UI.panel()
+	p.custom_minimum_size.x = 460
+	cc.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 16)
+	p.add_child(v)
+	var t := UI.pix_label("QUITTER ?", 14, UI.RED_DK)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var d := UI.label("Abandonner la partie en cours ?", 19, UI.INK, 600)
+	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(d)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	v.add_child(row)
+	var cancel := UI.button("RESTER", "btn", true)
+	cancel.pressed.connect(func() -> void: scrim.queue_free())
+	row.add_child(cancel)
+	var quit := UI.button("QUITTER", "dudo", true)
+	quit.pressed.connect(_leave)
+	row.add_child(quit)
+	scrim.gui_input.connect(func(ev: InputEvent) -> void:
+		if UI.tap(ev):
+			scrim.queue_free())
+	UI.pop_in(p)
+
 func _set_status(t: String) -> void:
 	status_gen += 1
 	var gen := status_gen
@@ -1190,8 +1232,12 @@ func _hud() -> void:
 	leave_btn.offset_top = 12 + safe_top
 	leave_btn.offset_bottom = 56 + safe_top
 	leave_btn.pressed.connect(func() -> void:
-		Net.leave()
-		get_tree().call_deferred("change_scene_to_file", "res://menu.tscn"))
+		# En partie : confirmation (#28) — un tap accidentel ne doit pas
+		# abandonner la table.
+		if view.get("state") == "playing":
+			_confirm_quit()
+		else:
+			_leave())
 	layer.add_child(leave_btn)
 
 	# Ma main : rangée d'icônes flottant juste au-dessus du panneau. La
