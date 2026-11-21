@@ -564,9 +564,16 @@ func _step_btn(t: String) -> Button:
 	return b
 
 func _set_qty(delta: int) -> void:
-	qty_val = clampi(qty_val + delta, 1, 60)
+	var nv: int = clampi(qty_val + delta, 1, 60)
+	if nv == qty_val:
+		return
+	qty_val = nv
 	qty_lbl.text = str(qty_val)
 	UI.punch(qty_lbl, 0.2)
+	# Tick haptique par pas (#48) — muet aux bornes, c'est le signal
+	# qu'on est au min/max.
+	if OS.get_name() == "Android":
+		Input.vibrate_handheld(15)
 	_update_actions()
 
 # Sélecteur de face : la face choisie est cerclée bleu, les autres atténuées.
