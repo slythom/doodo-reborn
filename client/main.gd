@@ -286,6 +286,16 @@ func _seat_badge(p_name: String, p_seat: int) -> Dictionary:
 # Pills des règles perso actives : construites une fois, visibles tant que
 # la partie tourne. Les ids sont traduits en libellés courts ici (même
 # liste que le catalogue de menu.gd — prête pour la localisation v1).
+# Descriptions des règles perso pour l'aide « ? » (#35) — mêmes textes
+# que le catalogue du menu (menu.gd RULES).
+const RULE_DESCS := {
+	"de_public": "Un dé de chaque joueur est révélé à tous en début de manche",
+	"double_paco": "Les pacos comptent double au décompte",
+	"salsa": "Enchérir et douter hors de son tour",
+	"calzone": "Calza réussi : vole un dé à l'adversaire de ton choix",
+	"pacobye": "Tirage 100 % pacos avec 4 ou 5 dés : élimination immédiate",
+}
+
 const RULE_NAMES := {
 	"de_public": "Dé public",
 	"double_paco": "Double Paco",
@@ -750,6 +760,56 @@ func _player_name(seat: int) -> String:
 func _leave() -> void:
 	Net.leave()
 	get_tree().call_deferred("change_scene_to_file", "res://menu.tscn")
+
+# Rappel des règles (#35) : bases du Perudo + options et règles perso
+# actives sur cette table — pour un testeur qui découvre le jeu.
+func _help_modal() -> void:
+	var g := UI.obj(UI.obj(view.get("options")).get("game"))
+	var opts := UI.obj(view.get("options"))
+	var lines: Array = [
+		"Enchéris une quantité de dés (tous ceux de la table) ou doute : Dudo = « tu mens », Calza = « l'enchère est exacte ».",
+	]
+	if bool(g.get("paco_joker", false)):
+		var paco := "Le paco (face 1) est joker : il compte pour toutes les faces."
+		if bool(g.get("palifico_enabled", false)):
+			paco += " Il le perd en palifico."
+		lines.append(paco)
+	if bool(g.get("calza_enabled", false)):
+		lines.append("Calza exact : tu regagnes un dé ; raté : tu en perds un.")
+	if int(opts.get("timer_seconds", 0)) > 0:
+		lines.append("Minuteur : %d s par action, sinon enchère auto." % int(opts.get("timer_seconds")))
+	for id in UI.arr(g.get("rules")):
+		lines.append("• %s : %s" % [String(RULE_NAMES.get(id, id)),
+			String(RULE_DESCS.get(id, ""))])
+
+	var scrim := ColorRect.new()
+	scrim.color = Color(0, 0, 0, 0.45)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(scrim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scrim.add_child(cc)
+	var p := UI.panel()
+	p.custom_minimum_size.x = minf(560.0, get_viewport_rect().size.x - 60)
+	cc.add_child(p)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 14)
+	p.add_child(v)
+	var t := UI.pix_label("RÈGLES", 14, UI.BLUE)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	for txt in lines:
+		var d := UI.label(txt, 18, UI.INK, 600)
+		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		v.add_child(d)
+	var ok := UI.button("OK", "primary", true)
+	ok.pressed.connect(func() -> void: scrim.queue_free())
+	v.add_child(ok)
+	scrim.gui_input.connect(func(ev: InputEvent) -> void:
+		if UI.tap(ev):
+			scrim.queue_free())
+	UI.pop_in(p)
 
 # Scrim de confirmation d'abandon (#28) : Rester / Quitter, tap sur le
 # fond = annuler.
@@ -1239,6 +1299,18 @@ func _hud() -> void:
 		else:
 			_leave())
 	layer.add_child(leave_btn)
+
+	# Aide « ? » (#35) : rappel des règles en cours — à gauche de Quitter.
+	var help_btn := UI.button("?", "btn")
+	help_btn.custom_minimum_size = Vector2(56, 44)
+	help_btn.add_theme_font_size_override("font_size", 24)
+	help_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	help_btn.offset_left = -182
+	help_btn.offset_right = -126
+	help_btn.offset_top = 12 + safe_top
+	help_btn.offset_bottom = 56 + safe_top
+	help_btn.pressed.connect(_help_modal)
+	layer.add_child(help_btn)
 
 	# Ma main : rangée d'icônes flottant juste au-dessus du panneau. La
 	# position suit la hauteur RÉELLE du panneau (variable selon le tour,
