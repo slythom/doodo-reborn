@@ -3,6 +3,13 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Modifié
+- Refactoring interne : les scrims des modales passent par un helper
+  commun (`UI.open_modal`) et les sons de verdict partagent
+  `_reveal_sfx` — aucun changement visible.
+
 ## [v0.10.11] — 2026-11-21
 
 ### Ajouté
