@@ -3,7 +3,7 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
-## [Non publié]
+## [v0.10.13] — 2026-11-21
 
 ### Modifié
 - Audit godot-master : casts `as` + test null dans kaykit, typage du
