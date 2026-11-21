@@ -213,7 +213,7 @@ func (h *Hub) dispatch(c *conn, s *session, m protocol.ClientMsg) {
 		if s.room != nil && s.member != nil {
 			s.room.Reconnected(s.member)
 		}
-		h.deliver(c, protocol.Envelope{Type: "welcome", Data: protocol.Welcome{Token: s.token, Name: s.name}})
+		h.deliver(c, protocol.Envelope{Type: "welcome", Data: protocol.Welcome{Token: s.token, Name: s.name, Proto: protocol.ProtoVersion}})
 	default:
 		h.sendErr(c, "unknown_type", "type de message inconnu: "+m.Type)
 	}
@@ -294,7 +294,7 @@ func (h *Hub) hello(c *conn, m protocol.ClientMsg) *session {
 	if s.room != nil && s.member != nil {
 		s.room.Reconnected(s.member)
 	}
-	h.deliver(c, protocol.Envelope{Type: "welcome", Data: protocol.Welcome{Token: token, Name: name}})
+	h.deliver(c, protocol.Envelope{Type: "welcome", Data: protocol.Welcome{Token: token, Name: name, Proto: protocol.ProtoVersion}})
 	slog.Info("hello", "token", token[:8], "name", name, "rejoin", s.room != nil)
 	return s
 }

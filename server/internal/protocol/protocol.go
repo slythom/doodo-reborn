@@ -94,9 +94,15 @@ type Envelope struct {
 	Data any    `json:"data,omitempty"`
 }
 
+// ProtoVersion : version du protocole — incrémenter à chaque rupture de
+// compatibilité. Le client le compare au sien dans welcome et prévient
+// d'un build obsolète pendant la bêta (#33).
+const ProtoVersion = 1
+
 type Welcome struct {
 	Token string `json:"token"`
 	Name  string `json:"name"`
+	Proto int    `json:"proto"`
 }
 
 type Error struct {

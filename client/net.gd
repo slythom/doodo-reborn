@@ -13,6 +13,9 @@ signal net_error(code: String, message: String)
 signal room_list(rooms: Array)
 
 const DEFAULT_URL := "ws://localhost:8080/ws"
+# Version du protocole — doit coller à protocol.ProtoVersion côté
+# serveur (#33) ; incrémentée ensemble à chaque rupture de compat.
+const PROTO_VERSION := 1
 # DOODO_PROFILE permet plusieurs instances sur la même machine (jetons
 # distincts, sinon la seconde vole la session de la première).
 var CFG: String = "user://session%s.cfg" % OS.get_environment("DOODO_PROFILE")
@@ -121,6 +124,10 @@ func _on_packet(txt: String) -> void:
 			var cfg := ConfigFile.new()
 			cfg.set_value("session", "token", token)
 			cfg.save(CFG)
+			var proto := int(data.get("proto", 0))
+			if proto != PROTO_VERSION:
+				net_error.emit("version",
+					"serveur incompatible (proto v%d) — mets à jour l'APK" % proto)
 			welcome.emit(token)
 		"room_state":
 			view = data
