@@ -125,9 +125,11 @@ func (h *Hub) pingPump(c *conn) {
 			err := c.ws.Ping(ctx)
 			cancel()
 			if err != nil {
+				slog.Warn("keep-alive ping échoué — conn fermée", "err", err)
 				_ = c.ws.Close(websocket.StatusInternalError, "ping timeout")
 				return
 			}
+			slog.Debug("keep-alive ping ok")
 		case <-c.done:
 			return
 		}

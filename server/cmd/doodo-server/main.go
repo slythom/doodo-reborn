@@ -11,6 +11,14 @@ import (
 )
 
 func main() {
+	// DOODO_LOG_LEVEL=debug affiche les pings keep-alive (#29) et autres
+	// détails — Info par défaut pour garder les logs exploitables.
+	level := slog.LevelInfo
+	if os.Getenv("DOODO_LOG_LEVEL") == "debug" {
+		level = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr,
+		&slog.HandlerOptions{Level: level})))
 	addr := os.Getenv("DOODO_ADDR")
 	if addr == "" {
 		addr = ":8080"
