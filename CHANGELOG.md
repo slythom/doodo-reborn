@@ -3,7 +3,7 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
-## [Non publié]
+## [v0.10.10] — 2026-11-21
 
 ### Ajouté
 - **#48** — tick haptique (15 ms) à chaque pas du stepper de quantité
