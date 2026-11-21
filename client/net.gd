@@ -104,8 +104,10 @@ func _notification(what: int) -> void:
 	if what != NOTIFICATION_APPLICATION_RESUMED:
 		return
 	if is_open():
+		print("[net] resume : socket ouverte — hello de sonde")
 		hello()
 	else:
+		print("[net] resume : socket morte — reconnexion")
 		connection_closed.emit() # « reconnexion… » sur l'écran courant
 		ws = null # un CONNECTING stale ne doit pas bloquer connect_server
 		_was_open = false
