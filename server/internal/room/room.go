@@ -691,8 +691,15 @@ func (r *Room) armTurnLocked(extra time.Duration) {
 		return
 	}
 	if m.Bot || m.ReplacedByBot {
-		delay := time.Duration(1000+r.rng.Intn(2000)) * time.Millisecond // 1-3 s (§5)
-		r.timer = r.newTimer(delay, func() { r.botAct(gen, seat) })
+		// Décision calculée à l'armement (#32) : le délai la reflète — un
+		// bot qui « réfléchit » avant un dudo/calza est plus crédible. Pas
+		// de dérive possible : tout Apply ré-arme et invalide gen.
+		act := r.botAI.Decide(r.game, seat)
+		delay := time.Duration(800+r.rng.Intn(2200)) * time.Millisecond // 0,8-3 s (§5)
+		if act.Type != game.ActionBid {
+			delay += time.Duration(800+r.rng.Intn(1400)) * time.Millisecond // hésitation
+		}
+		r.timer = r.newTimer(delay, func() { r.botAct(gen, seat, act) })
 		return
 	}
 	if r.Opts.TimerSeconds > 0 {
@@ -727,7 +734,8 @@ func (r *Room) armStealLocked(extra time.Duration) {
 		return
 	}
 	if m.Bot || m.ReplacedByBot {
-		r.timer = r.newTimer(800*time.Millisecond, func() { r.stealTimeout(gen, seat) })
+		delay := time.Duration(600+r.rng.Intn(900)) * time.Millisecond // choix de victime variable (#32)
+		r.timer = r.newTimer(delay, func() { r.stealTimeout(gen, seat) })
 		return
 	}
 	d := 15 * time.Second
@@ -751,7 +759,7 @@ func (r *Room) stealTimeout(gen, seat int) {
 	r.afterGameEventsLocked(evs)
 }
 
-func (r *Room) botAct(gen, seat int) {
+func (r *Room) botAct(gen, seat int, act game.Action) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if gen != r.timerGen || r.State != "playing" || r.game.Turn != seat {
@@ -761,7 +769,7 @@ func (r *Room) botAct(gen, seat int) {
 	if m == nil || (!m.Bot && !m.ReplacedByBot) {
 		return
 	}
-	evs, err := r.game.Apply(seat, r.botAI.Decide(r.game, seat))
+	evs, err := r.game.Apply(seat, act)
 	if err != nil { // ne devrait pas arriver — repli sur l'auto-action
 		evs, _ = r.game.AutoAction(seat)
 	}
