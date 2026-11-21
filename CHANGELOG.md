@@ -3,10 +3,11 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
-## [Non publié]
+## [v0.10.9] — 2026-11-21
 
 ### Ajouté
-- **#25** — vibration courte au début de son tour (Android).
+- **#25** — vibration courte au début de son tour (Android, permission
+  `VIBRATE` activée dans l'export).
 - **#27** — badge grisé + barre « hors-ligne » sur le compteur de dés
   d'un joueur déconnecté, pendant la fenêtre de reconnexion.
 - **#28** — confirmation avant de quitter une partie en cours
