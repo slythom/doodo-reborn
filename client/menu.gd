@@ -38,6 +38,7 @@ const RULES := [
 ]
 var _pending := ""
 var _pending_code := ""
+var _opts_applied_for := "" # code de salle où les réglages sauvés sont déjà posés (#34)
 # Lobby public (§3.2) : deux onglets, liste rafraîchie par polling.
 var _browse: VBoxContainer
 var _browse_card: PanelContainer
@@ -701,6 +702,7 @@ func _patch_opt(key: String, value: Variant) -> void:
 		UI.arr(g.get("rules")).erase("calzone")
 		o["game"] = g
 	Net.set_options(o)
+	_save_table_opts(o)
 
 # Bascule une règle perso : maj de options.game.rules + activation des
 # options mères requises, le tout en un seul set_options atomique (§1.5).
@@ -722,6 +724,41 @@ func _patch_rule(id: String, on: bool) -> void:
 	g["rules"] = rl
 	o["game"] = g
 	Net.set_options(o)
+	_save_table_opts(o)
+
+# Réglages de table persistés (#34) : la dernière config de l'hôte revient
+# à la prochaine salle créée — section [table] de user://settings.cfg.
+func _save_table_opts(o: Dictionary) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load("user://settings.cfg")
+	cfg.set_value("table", "options", o)
+	cfg.save("user://settings.cfg")
+
+# Réapplique la config sauvée — appelé une fois à l'entrée d'une salle
+# qu'on héberge (le décor passe par set_scene, ignoré par set_options).
+func _apply_saved_opts(v: Dictionary) -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") != OK:
+		return
+	var saved: Dictionary = UI.obj(cfg.get_value("table", "options", {}))
+	if saved.is_empty():
+		return
+	var o: Dictionary = UI.obj(v.get("options")).duplicate(true)
+	for k in ["timer_seconds", "max_players", "bot_replacement",
+			"spectators", "god_mode"]:
+		if saved.has(k):
+			o[k] = saved[k]
+	var sg := UI.obj(saved.get("game"))
+	var g: Dictionary = UI.obj(o.get("game")).duplicate(true)
+	for k in ["dice_per_player", "paco_joker", "calza_enabled",
+			"palifico_enabled", "rules"]:
+		if sg.has(k):
+			g[k] = sg[k]
+	o["game"] = g
+	Net.set_options(o)
+	var sc := String(saved.get("scene", ""))
+	if sc != "":
+		Net.set_scene(sc)
 
 # Aligne une liste sur la valeur serveur sans émettre de signal.
 func _sync_opt(o: OptionButton, meta_val: Variant) -> void:
@@ -907,6 +944,11 @@ func _on_view(v: Dictionary) -> void:
 	for c in _bots_box.get_children():
 		c.queue_free()
 	var is_host: bool = v.get("host", "") == Net.token
+	# Réglages persistés (#34) : une fois par salle, sinon la boucle
+	# room_state → set_options → room_state serait infinie.
+	if entering and is_host and _opts_applied_for != v.get("code", ""):
+		_opts_applied_for = String(v.get("code", ""))
+		_apply_saved_opts(v)
 	var idx := 0
 	for p in UI.arr(v.get("players")):
 		var txt: String = p.get("name", "?")
