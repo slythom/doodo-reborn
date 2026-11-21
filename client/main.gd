@@ -802,72 +802,38 @@ func _help_modal() -> void:
 		lines.append("• %s : %s" % [String(RULE_NAMES.get(id, id)),
 			String(RULE_DESCS.get(id, ""))])
 
-	var scrim := ColorRect.new()
-	scrim.color = Color(0, 0, 0, 0.45)
-	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(scrim)
-	var cc := CenterContainer.new()
-	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	scrim.add_child(cc)
-	var p := UI.panel()
-	p.custom_minimum_size.x = minf(560.0, get_viewport().get_visible_rect().size.x - 60)
-	cc.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 14)
-	p.add_child(v)
+	var m := UI.open_modal(self, minf(560.0, get_viewport().get_visible_rect().size.x - 60), false, 0.45, 14)
 	var t := UI.pix_label("RÈGLES", 14, UI.BLUE)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
+	m.add_child(t)
 	for txt in lines:
 		var d := UI.label(txt, 18, UI.INK, 600)
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		v.add_child(d)
+		m.add_child(d)
 	var ok := UI.button("OK", "primary", true)
-	ok.pressed.connect(func() -> void: scrim.queue_free())
-	v.add_child(ok)
-	scrim.gui_input.connect(func(ev: InputEvent) -> void:
-		if UI.tap(ev):
-			scrim.queue_free())
-	UI.pop_in(p)
+	ok.pressed.connect(m.close)
+	m.add_child(ok)
 
 # Scrim de confirmation d'abandon (#28) : Rester / Quitter, tap sur le
 # fond = annuler.
 func _confirm_quit() -> void:
-	var scrim := ColorRect.new()
-	scrim.color = Color(0, 0, 0, 0.45)
-	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(scrim)
-	var cc := CenterContainer.new()
-	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	scrim.add_child(cc)
-	var p := UI.panel()
-	p.custom_minimum_size.x = 460
-	cc.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 16)
-	p.add_child(v)
+	var m := UI.open_modal(self, 460)
 	var t := UI.pix_label("QUITTER ?", 14, UI.RED_DK)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t)
+	m.add_child(t)
 	var d := UI.label("Abandonner la partie en cours ?", 19, UI.INK, 600)
 	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(d)
+	m.add_child(d)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
-	v.add_child(row)
+	m.add_child(row)
 	var cancel := UI.button("RESTER", "btn", true)
-	cancel.pressed.connect(func() -> void: scrim.queue_free())
+	cancel.pressed.connect(m.close)
 	row.add_child(cancel)
 	var quit := UI.button("QUITTER", "dudo", true)
 	quit.pressed.connect(_leave)
 	row.add_child(quit)
-	scrim.gui_input.connect(func(ev: InputEvent) -> void:
-		if UI.tap(ev):
-			scrim.queue_free())
-	UI.pop_in(p)
 
 func _set_status(t: String) -> void:
 	status_gen += 1
@@ -1183,37 +1149,19 @@ func _show_seat_dice(p_seat: int) -> void:
 	var vals: Array = seats.get(p_seat, {}).get("dice_vals", [])
 	if vals.is_empty():
 		return
-	var scrim := ColorRect.new()
-	scrim.color = Color(0, 0, 0, 0.5)
-	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hud_layer.add_child(scrim) # dans le CanvasLayer : au-dessus du HUD
-	var cc := CenterContainer.new()
-	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE # les taps passent au scrim
-	scrim.add_child(cc)
-	var p := UI.panel()
-	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cc.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 16)
-	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(v)
+	var m := UI.open_modal(hud_layer, 0.0, true, 0.5) # CanvasLayer : au-dessus du HUD
 	var ttl := UI.player_chip(_player_name(p_seat), p_seat, 24)
 	ttl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	v.add_child(ttl)
+	m.add_child(ttl)
 	var drow := HBoxContainer.new()
 	drow.alignment = BoxContainer.ALIGNMENT_CENTER
 	drow.add_theme_constant_override("separation", 12)
 	drow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(drow)
+	m.add_child(drow)
 	for dv in vals:
 		var di := UI.DieIcon.new(int(dv), 56)
 		di.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		drow.add_child(di)
-	scrim.gui_input.connect(func(ev: InputEvent) -> void:
-		if UI.tap(ev):
-			scrim.queue_free())
-	UI.pop_in(p)
 
 func _on_notice(d: Dictionary) -> void:
 	match d.get("kind", ""):

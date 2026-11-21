@@ -446,6 +446,45 @@ static func panel() -> PanelContainer:
 	p.add_theme_stylebox_override("panel", px(PANEL, EDGE, 10, 3, 7))
 	return p
 
+# VBox de contenu d'une modale — close() détruit tout le scrim.
+class Modal:
+	extends VBoxContainer
+	var scrim: ColorRect
+	var panel: PanelContainer
+	func close() -> void:
+		scrim.queue_free()
+
+# Scrim modale plein écran : fond assombri + panneau centré + VBox.
+# Le tap sur le fond ferme. Renvoie la VBox — m.close() ferme proprement.
+# passthrough : le contenu est purement visuel, les taps le traversent.
+static func open_modal(parent: Node, min_w := 0.0, passthrough := false,
+		dim := 0.45, sep := 16) -> Modal:
+	var scrim := ColorRect.new()
+	scrim.color = Color(0, 0, 0, dim)
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(scrim)
+	var cc := CenterContainer.new()
+	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE # laisse passer le tap-fond
+	scrim.add_child(cc)
+	var p := panel()
+	if min_w > 0.0:
+		p.custom_minimum_size.x = min_w
+	cc.add_child(p)
+	var m := Modal.new()
+	m.scrim = scrim
+	m.panel = p
+	m.add_theme_constant_override("separation", sep)
+	p.add_child(m)
+	if passthrough:
+		p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scrim.gui_input.connect(func(ev: InputEvent) -> void:
+		if tap(ev):
+			m.close())
+	pop_in(p)
+	return m
+
 # Messages prédéfinis du chat en partie (§4.3) — le serveur whitelist les
 # ids en jeu ; le texte libre n'est possible qu'en salle d'attente.
 const CHAT_MSGS := {

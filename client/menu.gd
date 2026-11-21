@@ -684,32 +684,15 @@ func _toggle_cell(parent: Control, label_text: String, info := "") -> UI.ThemeSw
 # Modale de description d'une règle (issue #7) : scrim assombri + panneau
 # arcade centré, titre pixel + texte — tap sur le fond ou OK pour fermer.
 func _info_modal(title: String, desc: String) -> void:
-	var scrim := ColorRect.new()
-	scrim.color = Color(0, 0, 0, 0.45)
-	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(scrim)
-	var cc := CenterContainer.new()
-	cc.set_anchors_preset(Control.PRESET_FULL_RECT)
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE # laisse passer le tap-fond
-	scrim.add_child(cc)
-	var p := UI.panel()
-	p.custom_minimum_size.x = 420
-	cc.add_child(p)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 16)
-	p.add_child(v)
+	var m := UI.open_modal(self, 420)
 	var t := UI.pix_label(title.to_upper(), 13, UI.BLUE)
-	v.add_child(t)
+	m.add_child(t)
 	var d := UI.label(desc, 19, UI.INK, 600)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(d)
+	m.add_child(d)
 	var ok := UI.button("OK", "primary", true)
-	ok.pressed.connect(func() -> void: scrim.queue_free())
-	v.add_child(ok)
-	scrim.gui_input.connect(func(ev: InputEvent) -> void:
-		if UI.tap(ev):
-			scrim.queue_free())
-	UI.pop_in(p)
+	ok.pressed.connect(m.close)
+	m.add_child(ok)
 
 # Règles de base du Perudo pour l'accueil (#49) — statiques : pas de
 # prise en compte des options de table ici (voir « ? » en jeu pour ça).
