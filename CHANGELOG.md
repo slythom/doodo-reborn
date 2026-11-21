@@ -3,6 +3,12 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Modifié
+- Audit godot-master : casts `as` + test null dans kaykit, typage du
+  dispatch réseau, nommage `_scene_registry` — aucun changement visible.
+
 ## [v0.10.12] — 2026-11-21
 
 ### Modifié
