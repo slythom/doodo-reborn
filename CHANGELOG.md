@@ -3,6 +3,19 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Ajouté
+- **#25** — vibration courte au début de son tour (Android).
+- **#27** — badge grisé + barre « hors-ligne » sur le compteur de dés
+  d'un joueur déconnecté, pendant la fenêtre de reconnexion.
+- **#28** — confirmation avant de quitter une partie en cours
+  (Rester / Quitter, tap sur le fond = annuler).
+- **#35** — bouton « ? » en jeu : rappel des règles de base et des
+  options/règles perso actives sur la table.
+- **#44** — option « Réduire les animations » : coupe pops, punchs,
+  clignotements, shake et animations d'accueil (persistée).
+
 ## [v0.10.8] — 2026-11-21
 
 ### Ajouté
