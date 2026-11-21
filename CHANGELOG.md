@@ -3,6 +3,13 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Ajouté
+- **#50** — la face 1 (paco/joker) affiche un perroquet pixel-art en
+  couleurs à la place du pip (main, sélecteur de faces, enchères,
+  révélation, mode dieu).
+
 ## [v0.10.10] — 2026-11-21
 
 ### Ajouté
