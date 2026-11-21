@@ -289,6 +289,17 @@ func _build_ui() -> void:
 	_home.add_child(insc)
 	UI.blink(ins)
 
+	# « Comment jouer ? » (#49) : règles de base du Perudo, indépendantes
+	# des options de table.
+	var htc := CenterContainer.new()
+	var ht := UI.label("Comment jouer ?", 17, UI.BLUE, 700)
+	ht.mouse_filter = Control.MOUSE_FILTER_STOP
+	htc.add_child(ht)
+	_home.add_child(htc)
+	ht.gui_input.connect(func(ev: InputEvent) -> void:
+		if UI.tap(ev):
+			_howto_modal())
+
 	_status = UI.label("", 20, UI.RED_DK)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_home.add_child(_status)
@@ -699,6 +710,16 @@ func _info_modal(title: String, desc: String) -> void:
 		if UI.tap(ev):
 			scrim.queue_free())
 	UI.pop_in(p)
+
+# Règles de base du Perudo pour l'accueil (#49) — statiques : pas de
+# prise en compte des options de table ici (voir « ? » en jeu pour ça).
+func _howto_modal() -> void:
+	_info_modal("Comment jouer ?", "• Chacun lance 5 dés cachés sous son gobelet.\n" \
+		+ "• À ton tour, enchéris : « 7 × 4 » = au moins 7 dés de face 4 sous tous les gobelets. Chaque enchère doit monter.\n" \
+		+ "• Ou doute : « Dudo » = tu mens. Tous les dés sont révélés — enchère exagérée, l'enchérisseur perd un dé ; exacte ou plus, c'est toi.\n" \
+		+ "• « Calza » = c'est exact : enchère juste, tu regagnes un dé ; ratée, tu en perds un.\n" \
+		+ "• Le paco (face 1) est joker : il compte pour n'importe quelle face.\n" \
+		+ "• À 0 dé tu es éliminé. Le dernier avec des dés gagne la table.")
 
 # Envoie les options complètes avec un champ modifié — les clés du moteur
 # (§1.3) vivent sous options.game.
