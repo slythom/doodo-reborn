@@ -543,6 +543,7 @@ class CircleBadge:
 # ---- DieIcon : face de dé blanche + pips encres ----
 class DieIcon:
 	extends Control
+	const PARROT = preload("res://assets/paco_parrot.png")
 	var value := 1
 	var size_px := 44
 	var die_bg := Color("#FFFFFF")
@@ -554,6 +555,8 @@ class DieIcon:
 		value = v
 		size_px = s
 		custom_minimum_size = Vector2(s, s)
+		# Le perroquet reste pixel-art net à toutes les tailles.
+		texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, Vector2(size_px, size_px))
@@ -587,6 +590,11 @@ class DieIcon:
 		shade.corner_radius_bottom_left = face_r
 		shade.corner_radius_bottom_right = face_r
 		shade.draw(get_canvas_item(), Rect2(1.5, size_px * 0.60, size_px - 3, size_px * 0.40 - 1.5))
+		# Face 1 = paco : un perroquet en couleurs remplace le pip (#50).
+		if value == 1:
+			var m := size_px * 0.15
+			draw_texture_rect(PARROT, Rect2(m, m, size_px - m * 2.0, size_px - m * 2.0), false)
+			return
 		# Pips carrés : la signature pixel de la direction « borne d'arcade ».
 		var pip_s := size_px * 0.15
 		var q := size_px / 4.0
