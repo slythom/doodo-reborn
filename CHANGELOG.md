@@ -3,7 +3,7 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
-## [Non publié]
+## [v0.10.11] — 2026-11-21
 
 ### Ajouté
 - **#47** — son « win-dice » quand on regagne un dé (calza réussi),
