@@ -343,6 +343,11 @@ func _update_players() -> void:
 			if cb.accent != want:
 				cb.accent = want
 				cb.queue_redraw()
+			# Badge grisé + barre pendant la fenêtre de reconnexion (#27).
+			var disc: bool = not bool(p.get("connected", true))
+			if cb.disc != disc:
+				cb.disc = disc
+				cb.queue_redraw()
 
 # Ma main : rangée d'icônes 2D dans le HUD (plus de dés 3D sur la table).
 # Les dés pop en cascade quand la main change (lancer, perte, gain).

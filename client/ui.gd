@@ -485,6 +485,7 @@ class CircleBadge:
 	var col := UI.BLUE
 	var side := 40.0
 	var accent := false # liseré ambre : un tap révèle les dés du siège (#20)
+	var disc := false   # joueur déconnecté : grisé + barre « hors-ligne » (#27)
 
 	func _init(t := "", c := UI.BLUE, s := 40.0) -> void:
 		text = t
@@ -500,12 +501,18 @@ class CircleBadge:
 	func _draw() -> void:
 		var r := side / 2.0
 		var c := Vector2(r, r)
-		draw_circle(c, r, col)
-		draw_arc(c, r - 2.0, 0.0, TAU, 40, UI.AMBER if accent else Color.WHITE, 3.0, true)
+		draw_circle(c, r, col.lerp(UI.DIM, 0.72) if disc else col)
+		draw_arc(c, r - 2.0, 0.0, TAU, 40, UI.AMBER if accent else (UI.DIM if disc else Color.WHITE), 3.0, true)
 		var f := UI.font_w(700, true)
 		var fs := int(side * 0.52)
 		var ts := f.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
-		draw_string(f, Vector2(r - ts.x / 2.0, r + ts.y * 0.36), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color.WHITE)
+		draw_string(f, Vector2(r - ts.x / 2.0, r + ts.y * 0.36), text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
+			Color(1, 1, 1, 0.55) if disc else Color.WHITE)
+		if disc:
+			# Barre diagonale façon « hors-ligne » (pas de glyphe exotique).
+			draw_line(c + Vector2(-r * 0.6, r * 0.6), c + Vector2(r * 0.6, -r * 0.6),
+				Color(0.16, 0.18, 0.22, 0.85), 4.0, true)
 
 # ---- DieIcon : face de dé blanche + pips encres ----
 class DieIcon:
