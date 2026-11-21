@@ -688,29 +688,12 @@ func _on_events(events: Array) -> void:
 				if e.get("player", -1) == view.get("your_seat", -1):
 					_shake = 0.18 # c'est TON dé (#42)
 					_shake_t = 0.0
-					# SFX réservé au perdant, au terme du comptage vert (#46).
-					if reveal_panel.visible and _reveal_done_at > 0.0:
-						var d_sfx: float = maxf(0.0, _reveal_done_at - Time.get_unix_time_from_system())
-						var gen_sfx := reveal_gen
-						get_tree().create_timer(d_sfx).timeout.connect(func() -> void:
-							if reveal_panel.visible and gen_sfx == reveal_gen:
-								_seq_sfx("de-perdu"))
-					else:
-						_seq_sfx("de-perdu")
+					_reveal_sfx("de-perdu") # réservé au perdant (#46)
 				if reveal_panel.visible:
 					_verdict_flash_sub("%s perd un dé" % _player_name(e.get("player", -1)), UI.RED)
 			"die_gained":
 				if e.get("player", -1) == view.get("your_seat", -1):
-					# SFX réservé au joueur qui regagne un dé, au terme du
-					# comptage vert (#47) — symétrique de « de-perdu ».
-					if reveal_panel.visible and _reveal_done_at > 0.0:
-						var d_sfx: float = maxf(0.0, _reveal_done_at - Time.get_unix_time_from_system())
-						var gen_sfx := reveal_gen
-						get_tree().create_timer(d_sfx).timeout.connect(func() -> void:
-							if reveal_panel.visible and gen_sfx == reveal_gen:
-								_seq_sfx("win-dice"))
-					else:
-						_seq_sfx("win-dice")
+					_reveal_sfx("win-dice") # réservé au gagnant (#47)
 				if reveal_panel.visible:
 					_verdict_flash_sub("%s regagne un dé" % _player_name(e.get("player", -1)), UI.GREEN)
 			"steal_pending":
@@ -866,6 +849,19 @@ func _verdict_flash_sub(txt: String, col: Color) -> void:
 		_verdict_flash = reveal_verdict_sub.create_tween().set_loops()
 		_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 0.25, 0.14)
 		_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 1.0, 0.16)
+
+# SFX de verdict synchronisé sur la fin du comptage vert (#46/#47) :
+# différé tant que la révélation est affichée, immédiat sinon ; annulé
+# si une nouvelle révélation est arrivée entre-temps (reveal_gen).
+func _reveal_sfx(name: String) -> void:
+	if not reveal_panel.visible or _reveal_done_at <= 0.0:
+		_seq_sfx(name)
+		return
+	var d := maxf(0.0, _reveal_done_at - Time.get_unix_time_from_system())
+	var gen := reveal_gen
+	get_tree().create_timer(d).timeout.connect(func() -> void:
+		if reveal_panel.visible and gen == reveal_gen:
+			_seq_sfx(name))
 
 func _show_reveal(e: Dictionary) -> void:
 	reveal_gen += 1
