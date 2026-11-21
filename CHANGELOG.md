@@ -6,6 +6,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 ## [Non publié]
 
 ### Ajouté
+- **#47** — son « win-dice » quand on regagne un dé (calza réussi),
+  réservé au joueur concerné et synchronisé sur la fin du compteur vert.
 - **#50** — la face 1 (paco/joker) affiche un perroquet pixel-art en
   couleurs à la place du pip (main, sélecteur de faces, enchères,
   révélation, mode dieu).
