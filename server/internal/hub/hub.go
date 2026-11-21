@@ -90,6 +90,7 @@ func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
 	}
 	c := &conn{ws: ws, send: make(chan []byte, sendBuffer), done: make(chan struct{})}
 	go h.writePump(c)
+	go h.pingPump(c)
 	h.readPump(r.Context(), c)
 }
 
@@ -103,6 +104,28 @@ func (h *Hub) writePump(c *conn) {
 			err := c.ws.Write(ctx, websocket.MessageText, buf)
 			cancel()
 			if err != nil {
+				return
+			}
+		case <-c.done:
+			return
+		}
+	}
+}
+
+// pingPump garde la socket vivante par un ping WS toutes les 25 s (#29) :
+// les NAT mobiles/4G coupent les connexions idle (~60-120 s) sinon. Un
+// ping en échec ferme la conn pour réveiller readPump au plus vite.
+func (h *Hub) pingPump(c *conn) {
+	t := time.NewTicker(25 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err := c.ws.Ping(ctx)
+			cancel()
+			if err != nil {
+				_ = c.ws.Close(websocket.StatusInternalError, "ping timeout")
 				return
 			}
 		case <-c.done:
