@@ -116,6 +116,7 @@ func _ready() -> void:
 	UI.load_theme()
 	UI.load_audio()
 	UI.load_crt()
+	UI.load_anim()
 	randomize()
 	for kind in ITEMS:
 		splat_texs[kind] = _make_splat_texture(ITEMS[kind].splat)
@@ -372,7 +373,7 @@ func _update_my_dice() -> void:
 		var di := UI.DieIcon.new(int(vals[i]), 46)
 		di.pivot_offset = Vector2(23, 23)
 		my_dice_box.add_child(di)
-		if changed:
+		if changed and not UI.reduce_anim:
 			di.scale = Vector2.ZERO
 			var t := di.create_tween()
 			t.tween_property(di, "scale", Vector2.ONE, 0.3).set_delay(i * 0.05) \
@@ -453,9 +454,10 @@ func _update_turn() -> void:
 			# ne regarde pas l'écran pendant les tours adverses.
 			if OS.get_name() == "Android":
 				Input.vibrate_handheld(80)
-		_turn_tween = turn_lbl.create_tween().set_loops()
-		_turn_tween.tween_property(turn_lbl, "modulate:a", 0.55, 0.45)
-		_turn_tween.tween_property(turn_lbl, "modulate:a", 1.0, 0.45)
+		if not UI.reduce_anim:
+			_turn_tween = turn_lbl.create_tween().set_loops()
+			_turn_tween.tween_property(turn_lbl, "modulate:a", 0.55, 0.45)
+			_turn_tween.tween_property(turn_lbl, "modulate:a", 1.0, 0.45)
 	elif turn >= 0:
 		turn_lbl.text = "Tour de %s" % _player_name(turn)
 		turn_lbl.add_theme_color_override("font_color", UI.DIM)
@@ -791,7 +793,7 @@ func _help_modal() -> void:
 	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	scrim.add_child(cc)
 	var p := UI.panel()
-	p.custom_minimum_size.x = minf(560.0, get_viewport_rect().size.x - 60)
+	p.custom_minimum_size.x = minf(560.0, get_viewport().get_visible_rect().size.x - 60)
 	cc.add_child(p)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 14)
@@ -876,9 +878,10 @@ func _verdict_flash_sub(txt: String, col: Color) -> void:
 	reveal_verdict_sub.add_theme_color_override("font_shadow_color", Color(col, 0.5))
 	reveal_verdict_sub.add_theme_constant_override("shadow_offset_y", 3)
 	reveal_verdict_sub.modulate.a = 1.0
-	_verdict_flash = reveal_verdict_sub.create_tween().set_loops()
-	_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 0.25, 0.14)
-	_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 1.0, 0.16)
+	if not UI.reduce_anim:
+		_verdict_flash = reveal_verdict_sub.create_tween().set_loops()
+		_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 0.25, 0.14)
+		_verdict_flash.tween_property(reveal_verdict_sub, "modulate:a", 1.0, 0.16)
 
 func _show_reveal(e: Dictionary) -> void:
 	reveal_gen += 1
@@ -996,9 +999,10 @@ func _show_reveal(e: Dictionary) -> void:
 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			reveal_count.text = str(mini(n, total))
 			# Petit punch sur le compteur à chaque dé concordant.
-			reveal_count.scale = Vector2(1.3, 1.3)
-			var pt := create_tween()
-			pt.tween_property(reveal_count, "scale", Vector2.ONE, 0.18))
+			if not UI.reduce_anim:
+				reveal_count.scale = Vector2(1.3, 1.3)
+				var pt := create_tween()
+				pt.tween_property(reveal_count, "scale", Vector2.ONE, 0.18))
 	_reveal_done_at = Time.get_unix_time_from_system() + 0.5 + lit.size() * 0.4 + 0.3
 	get_tree().create_timer(0.5 + lit.size() * 0.4 + 0.3).timeout.connect(func() -> void:
 		if gen != reveal_gen:
@@ -1735,6 +1739,8 @@ func _process(delta: float) -> void:
 	if _shake_t >= 0.0:
 		_shake_t += delta
 		var env: float = _shake * exp(-4.5 * _shake_t)
+		if UI.reduce_anim:
+			env = 0.0 # shake d'écran coupé par l'option (#44)
 		cam.h_offset = sin(_shake_t * 52.0) * env
 		cam.v_offset = cos(_shake_t * 44.0) * env * 0.7
 		if env < 0.001:

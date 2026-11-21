@@ -53,6 +53,7 @@ func _ready() -> void:
 	UI.load_theme()
 	UI.load_audio()
 	UI.load_crt()
+	UI.load_anim()
 	_build_ui()
 	Net.connection_opened.connect(func() -> void:
 		var pseudo := _name_edit.text.strip_edges()
@@ -148,12 +149,13 @@ func _build_ui() -> void:
 		orb.position = o[0]
 		add_child(orb)
 
-	# Attract mode (#38) : dés qui flottent en fond, derrière la carte.
+	# Attract mode (#38) : dés qui flottent en fond, derrière la carte —
+	# désactivé si l'option « réduire les animations » est ON (#44).
 	var attract := Control.new()
 	attract.set_anchors_preset(Control.PRESET_FULL_RECT)
 	attract.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(attract)
-	for i in 7:
+	for i in (0 if UI.reduce_anim else 7):
 		var d := UI.DieIcon.new(randi_range(1, 6), 46)
 		d.modulate = Color(1, 1, 1, 0.4)
 		d.pivot_offset = Vector2(23, 23)
@@ -198,18 +200,20 @@ func _build_ui() -> void:
 	logo.add_child(d2)
 	# Le titre flotte doucement (wobble infini, écran d'accueil Wii).
 	# Bindé à title : le tween meurt avec le nœud (rebuild du thème).
-	var wob := title.create_tween().set_loops()
-	wob.tween_property(title, "scale", Vector2(1.04, 1.04), 1.4).set_trans(Tween.TRANS_SINE)
-	wob.parallel().tween_property(title, "rotation_degrees", -1.2, 1.4).set_trans(Tween.TRANS_SINE)
-	wob.tween_property(title, "scale", Vector2.ONE, 1.4).set_trans(Tween.TRANS_SINE)
-	wob.parallel().tween_property(title, "rotation_degrees", 0.0, 1.4).set_trans(Tween.TRANS_SINE)
-	# Flicker néon (#38) : micro-coupures d'alpha toutes les ~3 s.
-	var fl := title.create_tween().set_loops()
-	fl.tween_interval(2.7)
-	fl.tween_property(title, "modulate:a", 0.45, 0.05)
-	fl.tween_property(title, "modulate:a", 1.0, 0.08)
-	fl.tween_property(title, "modulate:a", 0.7, 0.04)
-	fl.tween_property(title, "modulate:a", 1.0, 0.07)
+	# Coupé par l'option « réduire les animations » (#44).
+	if not UI.reduce_anim:
+		var wob := title.create_tween().set_loops()
+		wob.tween_property(title, "scale", Vector2(1.04, 1.04), 1.4).set_trans(Tween.TRANS_SINE)
+		wob.parallel().tween_property(title, "rotation_degrees", -1.2, 1.4).set_trans(Tween.TRANS_SINE)
+		wob.tween_property(title, "scale", Vector2.ONE, 1.4).set_trans(Tween.TRANS_SINE)
+		wob.parallel().tween_property(title, "rotation_degrees", 0.0, 1.4).set_trans(Tween.TRANS_SINE)
+		# Flicker néon (#38) : micro-coupures d'alpha toutes les ~3 s.
+		var fl := title.create_tween().set_loops()
+		fl.tween_interval(2.7)
+		fl.tween_property(title, "modulate:a", 0.45, 0.05)
+		fl.tween_property(title, "modulate:a", 1.0, 0.08)
+		fl.tween_property(title, "modulate:a", 0.7, 0.04)
+		fl.tween_property(title, "modulate:a", 1.0, 0.07)
 
 	var subc := CenterContainer.new()
 	var tag := UI.pill("PERUDO EN LIGNE", Color("#D9F1FB"), UI.BLUE_DK, 13)
@@ -326,6 +330,23 @@ func _build_ui() -> void:
 		UI.set_crt(on)
 		_rebuild())
 	crt_row.add_child(crt_sw)
+
+	# Réduire les animations (#44) : coupe pops/punchs/shakes — switch ON
+	# = animations réduites, persiste comme le thème.
+	var anim_row := HBoxContainer.new()
+	anim_row.add_theme_constant_override("separation", 10)
+	cv.add_child(anim_row)
+	var arl := UI.label("Réduire les animations", 20, UI.INK, 700)
+	arl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	anim_row.add_child(arl)
+	var anim_spacer := Control.new()
+	anim_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	anim_row.add_child(anim_spacer)
+	var anim_sw := UI.ThemeSwitch.new(UI.reduce_anim, false, true)
+	anim_sw.toggled.connect(func(on: bool) -> void:
+		UI.set_anim(on)
+		_rebuild())
+	anim_row.add_child(anim_sw)
 
 	# Audio : volume + mute des SFX, persistés (§4.3).
 	var audio_row := HBoxContainer.new()

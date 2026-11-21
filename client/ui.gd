@@ -115,6 +115,26 @@ static func load_crt() -> void:
 		# Sans cfg : appliquer le défaut, pas seulement le flag (cf. #18).
 		set_crt(crt, false)
 
+# ---- Réduire les animations (#44) : accessibilité + batterie ----
+# Coupe les tweens décoratifs (pop/punch/blink/shake) — les retours
+# fonctionnels (compteurs, remplissages) restent.
+static var reduce_anim := false
+
+static func set_anim(reduced: bool, persist := true) -> void:
+	reduce_anim = reduced
+	if persist:
+		var cfg := ConfigFile.new()
+		cfg.load("user://settings.cfg")
+		cfg.set_value("display", "anim_reduced", reduce_anim)
+		cfg.save("user://settings.cfg")
+
+static func load_anim() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		set_anim(bool(cfg.get_value("display", "anim_reduced", false)), false)
+	else:
+		set_anim(reduce_anim, false)
+
 const CRT_SHADER := """
 shader_type canvas_item;
 void fragment() {
@@ -313,6 +333,8 @@ static func option_button() -> OptionButton:
 
 # Réaction tactile : le bouton s'écrase à l'appui puis rebondit.
 static func _squish(b: Button) -> void:
+	if reduce_anim:
+		return
 	b.pivot_offset = b.size / 2.0
 	b.resized.connect(func() -> void: b.pivot_offset = b.size / 2.0)
 	b.button_down.connect(func() -> void:
@@ -326,6 +348,8 @@ static func _squish(b: Button) -> void:
 static func pop_in(c: Control, delay := 0.0) -> void:
 	c.pivot_offset = c.size / 2.0
 	c.resized.connect(func() -> void: c.pivot_offset = c.size / 2.0, CONNECT_ONE_SHOT)
+	if reduce_anim:
+		return
 	c.scale = Vector2(0.55, 0.55)
 	c.modulate.a = 0.0
 	var t := c.create_tween().set_parallel()
@@ -337,6 +361,8 @@ static func pop_in(c: Control, delay := 0.0) -> void:
 static func punch(c: Control, power := 0.18) -> void:
 	c.pivot_offset = c.size / 2.0
 	c.resized.connect(func() -> void: c.pivot_offset = c.size / 2.0, CONNECT_ONE_SHOT)
+	if reduce_anim:
+		return
 	var t := c.create_tween()
 	t.tween_property(c, "scale", Vector2.ONE * (1.0 + power), 0.08)
 	t.tween_property(c, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -797,6 +823,8 @@ class Scanlines:
 # Clignotement « borne » : le contrôle pulse en alpha, en boucle. Bindé au
 # nœud — le tween meurt avec lui (rebuilds de thème).
 static func blink(c: Control, period := 0.55, lo := 0.15) -> void:
+	if reduce_anim:
+		return
 	var t := c.create_tween().set_loops()
 	t.tween_property(c, "modulate:a", lo, period).set_trans(Tween.TRANS_SINE)
 	t.tween_property(c, "modulate:a", 1.0, period).set_trans(Tween.TRANS_SINE)
