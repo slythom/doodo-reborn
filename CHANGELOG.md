@@ -3,6 +3,14 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [Non publié]
+
+### Ajouté
+- **#48** — tick haptique (15 ms) à chaque pas du stepper de quantité
+  (muet aux bornes min/max).
+- **#49** — lien « Comment jouer ? » sur l'accueil : modale avec les
+  règles de base du Perudo, indépendantes des options de table.
+
 ## [v0.10.9] — 2026-11-21
 
 ### Ajouté
