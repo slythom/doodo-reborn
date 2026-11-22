@@ -12,7 +12,7 @@ signal notice_msg(data: Dictionary)
 signal net_error(code: String, message: String)
 signal room_list(rooms: Array)
 
-const DEFAULT_URL := "ws://localhost:8080/ws"
+const DEFAULT_URL := "wss://doodo.sylvainthomas.fr/ws"
 # Version du protocole — doit coller à protocol.ProtoVersion côté
 # serveur (#33) ; incrémentée ensemble à chaque rupture de compat.
 const PROTO_VERSION := 1
@@ -40,13 +40,15 @@ func _ready() -> void:
 		server = env
 	set_process(false)
 
-# ws_url : URL effective — normalise « hote.fr » en « wss://hote.fr/ws ».
+# ws_url : URL effective — normalise « hote.fr » en « wss://hote.fr/ws »,
+# sauf les hôtes locaux (localhost, 127.x, ::1) qui restent en ws://.
 func ws_url() -> String:
 	var u := server.strip_edges()
 	if u == "":
 		return DEFAULT_URL
 	if "://" not in u:
-		u = "wss://" + u
+		var host := u.split("/")[0].split(":")[0]
+		u = ("ws://" if host == "localhost" or host.begins_with("127.") else "wss://") + u
 	if not u.ends_with("/ws"):
 		u = u.rstrip("/") + "/ws"
 	return u

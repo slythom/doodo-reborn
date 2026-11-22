@@ -1,5 +1,4 @@
 # Caddyfile — reverse-proxy TLS devant doodo-server (§5, option VPS).
-# Remplacer doodo.exemple.fr par le domaine réel.
-doodo.exemple.fr {
+doodo.sylvainthomas.fr {
 	reverse_proxy 127.0.0.1:8080
 }
