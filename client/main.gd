@@ -41,6 +41,8 @@ var palifico_lbl: Label
 var rules_row: HBoxContainer # pills des règles perso actives (§1.5)
 var status_lbl: Label        # pill de toast (chat, élimination…)
 var chat_panel: PanelContainer # panneau des messages prédéfinis (§4.3)
+var _left_col: VBoxContainer    # colonne chat+mute (bord gauche, bas)
+var _items_col: VBoxContainer   # colonne items (bord droit, bas)
 var my_dice_box: HBoxContainer # ma main : icônes de dés 2D
 var hand_cc: CenterContainer   # centreur de ma main (repositionné au-dessus du panneau)
 var hud_layer: CanvasLayer     # modales (dés révélés) ajoutées ici : au-dessus de tout le HUD
@@ -1112,6 +1114,14 @@ func _place_hand() -> void:
 		clearance += int(action_bar.size.y)
 	hand_cc.offset_bottom = -clearance
 	hand_cc.offset_top = -clearance - 56
+	# Colonnes latérales (chat+mute à gauche, items à droite) et panneau
+	# chat : le plus bas possible, juste au-dessus de ma main (56 px + 10
+	# de marge). Ancrées bas + grow BEGIN : elles s'étendent vers le haut.
+	var cols_bottom := -(clearance + 66)
+	for c in [_left_col, _items_col, chat_panel]:
+		if is_instance_valid(c):
+			c.offset_top = cols_bottom
+			c.offset_bottom = cols_bottom
 	# Jauge horizontale (#22) : même bande que la main, centrée dessus.
 	# Largeur FIXE (#24) — la mesure dynamique de la main variait en cours
 	# de partie ; 180 px reste sous les dés centrés dans tous les cas.
@@ -1289,15 +1299,17 @@ func _hud() -> void:
 	my_dice_box.add_theme_constant_override("separation", 10)
 	hand_cc.add_child(my_dice_box)
 
-	# Sélecteur de projectile : chips verticales au bord droit, à hauteur de
-	# pouce. L'item armé porte un anneau bleu ; le tap sur un joueur le lance.
-	var ib := VBoxContainer.new()
-	ib.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	ib.offset_left = -72
-	ib.offset_right = -12
-	ib.grow_vertical = Control.GROW_DIRECTION_BOTH
-	ib.add_theme_constant_override("separation", 10)
-	layer.add_child(ib)
+	# Sélecteur de projectile : chips verticales au bord droit, le plus bas
+	# possible (juste au-dessus de ma main — bas recalé dans _place_hand).
+	# L'item armé porte un anneau bleu ; le tap sur un joueur le lance.
+	_items_col = VBoxContainer.new()
+	_items_col.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_items_col.offset_left = -72
+	_items_col.offset_right = -12
+	_items_col.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_items_col.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_items_col.add_theme_constant_override("separation", 10)
+	layer.add_child(_items_col)
 	for kind in ITEMS:
 		var ic := UI.ItemIcon.new(kind, 54)
 		ic.tooltip_text = ITEMS[kind].label
@@ -1306,7 +1318,7 @@ func _hud() -> void:
 			if UI.tap(ev):
 				_set_item(k))
 		item_icons[kind] = ic
-		ib.add_child(ic)
+		_items_col.add_child(ic)
 	_set_item("tomato")
 
 	# Jauge de tour (#22) : barre horizontale au-dessus du panneau d'action
@@ -1586,14 +1598,19 @@ func _hud() -> void:
 	# mi-hauteur à gauche (miroir des items à droite), panneau de choix
 	# qui s'ouvre à sa droite. Canal unique : joueurs et spectateurs
 	# peuvent tous envoyer. En dernier : au-dessus des panneaux/overlays.
+	_left_col = VBoxContainer.new()
+	_left_col.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_left_col.offset_left = 14
+	_left_col.offset_right = 14
+	# Le plus bas possible — juste au-dessus de ma main, recalé avec la
+	# colonne des items dans _place_hand.
+	_left_col.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_left_col.add_theme_constant_override("separation", 14)
+	layer.add_child(_left_col)
 	var chat_btn := UI.button("💬", "btn")
 	chat_btn.custom_minimum_size = Vector2(60, 60)
 	chat_btn.add_theme_font_size_override("font_size", 26)
-	chat_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	chat_btn.offset_left = 14
-	chat_btn.offset_top = -30
-	chat_btn.offset_bottom = 30
-	layer.add_child(chat_btn)
+	_left_col.add_child(chat_btn)
 
 	chat_panel = UI.panel()
 	chat_panel.visible = false
@@ -1609,9 +1626,9 @@ func _hud() -> void:
 			Net.chat(mid)
 			chat_panel.visible = false)
 		cv.add_child(b)
-	chat_panel.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	chat_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	chat_panel.grow_horizontal = Control.GROW_DIRECTION_END
-	chat_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	chat_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	chat_panel.offset_left = 86
 	chat_panel.offset_right = 86
 	layer.add_child(chat_panel)
@@ -1621,11 +1638,7 @@ func _hud() -> void:
 	var mute_btn := UI.button("🔊" if not UI.sfx_muted else "🔇", "btn")
 	mute_btn.custom_minimum_size = Vector2(60, 60)
 	mute_btn.add_theme_font_size_override("font_size", 24)
-	mute_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	mute_btn.offset_left = 14
-	mute_btn.offset_top = 44
-	mute_btn.offset_bottom = 104
-	layer.add_child(mute_btn)
+	_left_col.add_child(mute_btn)
 	mute_btn.pressed.connect(func() -> void:
 		UI.set_audio(not UI.sfx_muted, UI.sfx_volume)
 		mute_btn.text = "🔇" if UI.sfx_muted else "🔊")
