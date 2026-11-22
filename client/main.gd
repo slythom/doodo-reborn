@@ -121,6 +121,7 @@ func _ready() -> void:
 	for kind in ITEMS:
 		splat_texs[kind] = _make_splat_texture(ITEMS[kind].splat)
 	stink_tex = _make_stink_texture()
+	_warm_fx()
 	view = Net.view
 	_build_scene()
 	_hud()
@@ -2272,11 +2273,9 @@ func _throw_item(mii: Node3D, kind: String, from_seat := -1) -> void:
 func _bezier_move(t: float, node: Node3D, p0: Vector3, mid: Vector3, p2: Vector3) -> void:
 	node.global_position = p0.lerp(mid, t).lerp(mid.lerp(p2, t), t)
 
-func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3, from := Vector3.ZERO) -> void:
-	node.queue_free()
-	var item: Dictionary = ITEMS[kind]
-	var col: Color = item.color
-
+# Gerbe de particules d'impact — factorisée : _warm_fx préchauffe son
+# shader à l'ouverture de la scène (le 1er impact compilait → lag).
+func _impact_particles(col: Color) -> GPUParticles3D:
 	var ppm := ParticleProcessMaterial.new()
 	ppm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	ppm.emission_sphere_radius = 0.03
@@ -2298,11 +2297,10 @@ func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3, from := 
 	dm.height = 0.024
 	dm.material = mat(col, 0.5)
 	gp.draw_pass_1 = dm
-	gp.position = at
-	add_child(gp)
-	gp.emitting = true
-	get_tree().create_timer(1.5).timeout.connect(gp.queue_free)
+	return gp
 
+# Quad du splat — factorisé pour _warm_fx (même variante de shader).
+func _splat_quad(kind: String) -> MeshInstance3D:
 	var splat := MeshInstance3D.new()
 	var sq := QuadMesh.new()
 	sq.size = Vector2(0.2, 0.2)
@@ -2311,6 +2309,57 @@ func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3, from := 
 	sqm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	sq.material = sqm
 	splat.mesh = sq
+	return splat
+
+# Préchauffe les shaders/textures des effets d'impact : chaque variante est
+# dessinée une frame sous la table (occluse mais rasterisée). Sans ça, le
+# premier lancer compilait les variantes au moment de l'impact — lag visible.
+func _warm_fx() -> void:
+	var warm := Node3D.new()
+	warm.position = Vector3(0, -0.55, 0)
+	add_child(warm)
+	var gp := _impact_particles(Color.WHITE)
+	warm.add_child(gp)
+	gp.emitting = true
+	warm.add_child(_splat_quad("tomato"))
+	# Quad teinté alpha (drips) — variante sans texture.
+	var drip := MeshInstance3D.new()
+	var dq := QuadMesh.new()
+	dq.size = Vector2(0.028, 0.1)
+	var dqm := StandardMaterial3D.new()
+	dqm.albedo_color = Color.WHITE
+	dqm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dq.material = dqm
+	drip.mesh = dq
+	warm.add_child(drip)
+	# Quad billboard non éclairé (volutes du caca) — autre variante.
+	var wisp := MeshInstance3D.new()
+	var wq := QuadMesh.new()
+	wq.size = Vector2(0.28, 0.32)
+	var wqm := StandardMaterial3D.new()
+	wqm.albedo_texture = stink_tex
+	wqm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wqm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	wqm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wq.material = wqm
+	wisp.mesh = wq
+	warm.add_child(wisp)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	warm.queue_free()
+
+func _item_impact(mii: Node3D, kind: String, node: Node3D, at: Vector3, from := Vector3.ZERO) -> void:
+	node.queue_free()
+	var item: Dictionary = ITEMS[kind]
+	var col: Color = item.color
+
+	var gp := _impact_particles(col)
+	gp.position = at
+	add_child(gp)
+	gp.emitting = true
+	get_tree().create_timer(1.5).timeout.connect(gp.queue_free)
+
+	var splat := _splat_quad(kind)
 	if mii.has_method("attach_splat"):
 		mii.attach_splat(splat, from)
 	else:

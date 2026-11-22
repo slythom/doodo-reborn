@@ -3,6 +3,14 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [v0.10.15] — 2026-11-22
+
+### Corrigé
+- Lag au premier impact d'objet lancé : les shaders des effets
+  (particules, splat, gouttes, volutes) sont préchauffés une frame sous
+  la table à l'ouverture de la scène au lieu d'être compilés au moment
+  de l'impact.
+
 ## [v0.10.14] — 2026-11-22
 
 ### Ajouté
