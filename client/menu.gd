@@ -530,7 +530,7 @@ func _build_ui() -> void:
 	chat_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lv.add_child(chat_hdr)
 	_chat_scroll = ScrollContainer.new()
-	_chat_scroll.custom_minimum_size.y = 100
+	_chat_scroll.custom_minimum_size.y = 130
 	_chat_scroll.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	lv.add_child(_chat_scroll)
 	_chat_log = VBoxContainer.new()
@@ -1080,7 +1080,7 @@ func _on_notice(d: Dictionary) -> void:
 			_chat_append(msg)
 
 func _chat_append(msg: String) -> void:
-	var l := UI.label(msg, 15, UI.INK)
+	var l := UI.label(msg, 20, UI.INK)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_chat_log.add_child(l)
 	while _chat_log.get_child_count() > 30:

@@ -504,8 +504,7 @@ func (r *Room) Emote(id, targetSeat, kind string) {
 // validChatMsgs est la whitelist des messages prédéfinis en partie (§4.3) —
 // les ids sont relégués tels quels, le client les traduit à l'affichage.
 var validChatMsgs = map[string]bool{
-	"salut": true, "bj": true, "merci": true, "oups": true,
-	"wow": true, "gg": true, "menteur": true,
+	"oblige": true, "moment": true, "hein": true, "redit": true, "pelloche": true, "cafe": true,
 }
 
 // Chat relaie un message au canal unique (joueurs + spectateurs, §4.3) —

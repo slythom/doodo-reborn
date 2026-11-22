@@ -336,18 +336,18 @@ func TestChatFreeVsPredefined(t *testing.T) {
 		return out
 	}
 	r.Chat("u1", "bonjour les amis")
-	r.Chat("u2", "salut") // id prédéfini accepté aussi en lobby
-	if got := chatTexts(); len(got) != 2 || got[0] != "bonjour les amis" || got[1] != "salut" {
+	r.Chat("u2", "hein") // id prédéfini accepté aussi en lobby
+	if got := chatTexts(); len(got) != 2 || got[0] != "bonjour les amis" || got[1] != "hein" {
 		t.Fatalf("chat lobby=%v", got)
 	}
 	s.msgs = nil
 	r.Launch("u1")
 	s.msgs = nil
 	r.Chat("u1", "texte libre interdit en jeu")
-	r.Chat("u1", "salut")
-	r.Chat("u2", "bj")
-	if got := chatTexts(); len(got) != 2 || got[0] != "salut" || got[1] != "bj" {
-		t.Fatalf("chat en jeu=%v, want [salut bj]", got)
+	r.Chat("u1", "hein")
+	r.Chat("u2", "redit")
+	if got := chatTexts(); len(got) != 2 || got[0] != "hein" || got[1] != "redit" {
+		t.Fatalf("chat en jeu=%v, want [hein redit]", got)
 	}
 }
 

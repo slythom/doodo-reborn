@@ -1602,8 +1602,8 @@ func _hud() -> void:
 	chat_panel.add_child(cv)
 	for id in UI.CHAT_MSGS:
 		var b := UI.button(UI.CHAT_MSGS[id], "btn")
-		b.custom_minimum_size = Vector2(180, 46)
-		b.add_theme_font_size_override("font_size", 17)
+		b.custom_minimum_size = Vector2(340, 46)
+		b.add_theme_font_size_override("font_size", 16)
 		var mid: String = id
 		b.pressed.connect(func() -> void:
 			Net.chat(mid)

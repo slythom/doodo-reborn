@@ -488,8 +488,7 @@ static func open_modal(parent: Node, min_w := 0.0, passthrough := false,
 # Messages prédéfinis du chat en partie (§4.3) — le serveur whitelist les
 # ids en jeu ; le texte libre n'est possible qu'en salle d'attente.
 const CHAT_MSGS := {
-	"salut": "Salut !", "bj": "Bien joué !", "merci": "Merci !",
-	"oups": "Oups…", "wow": "Wow !", "gg": "GG !", "menteur": "Menteur !",
+	"oblige": "T'es pas obligé de me croire, mais...", "moment": "Non mais à aucun moment !", "hein": "Hein ?", "redit": "On redit pas !", "pelloche": "Pelloche il a encore 8 pacos", "cafe": "Un ptit café ?"
 }
 
 # Traduit un id prédéfini en libellé d'affichage — le texte libre passe tel quel.
