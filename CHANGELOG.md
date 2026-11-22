@@ -3,6 +3,20 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [v0.10.14] — 2026-11-22
+
+### Ajouté
+- **Backend production** : le serveur tourne sur un VPS dédié
+  (`doodo.sylvainthomas.fr`) derrière Caddy — TLS automatique,
+  service systemd durci. Fini les tunnels éphémères.
+- Le client pointe désormais sur ce serveur par défaut : plus rien
+  à saisir dans le champ « Serveur » (qui reste un override ; taper
+  `localhost:8080` garde `ws://` pour le dev local).
+
+### Corrigé
+- Chargement du sprite perroquet en lazy-load : la CI (clone frais)
+  repasse au vert — sans changement visible en jeu.
+
 ## [v0.10.13] — 2026-11-21
 
 ### Modifié
