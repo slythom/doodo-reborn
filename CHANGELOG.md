@@ -3,6 +3,22 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [v0.10.17] — 2026-11-22
+
+### Modifié
+- **#53** — les bots ajoutés s'affichent en ligne avec retour à la
+  ligne automatique (au lieu d'une pile verticale), espacés pour que la
+  croix de suppression reste facile à taper.
+- **#54** — taille des labels des options de table légèrement augmentée.
+- Colonnes latérales (chat/mute à gauche, objets à lancer à droite)
+  descendues juste au-dessus de votre main — elles ne masquent plus les
+  joueurs.
+
+### Corrigé
+- **#55** — à 6 joueurs, les adversaires aux extrémités de l'arc et
+  leurs badges étaient coupés : caméra reculée dans toutes les scènes
+  (salon compris).
+
 ## [v0.10.16] — 2026-11-22
 
 ### Modifié
