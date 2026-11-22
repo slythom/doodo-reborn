@@ -3,6 +3,14 @@
 Toutes les modifications notables de Doodo, par version.
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 
+## [v0.10.16] — 2026-11-22
+
+### Modifié
+- Nouveaux messages prédéfinis du chat en partie (whitelist serveur
+  synchronisée).
+- Chat du lobby : messages agrandis (15 → 20) pour la lisibilité mobile,
+  panneau 💬 en jeu élargi pour les libellés longs.
+
 ## [v0.10.15] — 2026-11-22
 
 ### Corrigé
