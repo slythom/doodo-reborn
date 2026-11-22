@@ -466,7 +466,7 @@ func _build_ui() -> void:
 	var scene_row := HBoxContainer.new()
 	scene_row.add_theme_constant_override("separation", 10)
 	lv.add_child(scene_row)
-	var sl := UI.label("Décor", 18, UI.INK, 700)
+	var sl := UI.label("Décor", 21, UI.INK, 700)
 	sl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	scene_row.add_child(sl)
 	_scene_opt = UI.option_button()
@@ -657,7 +657,7 @@ func _opt_row(parent: Control, label_text: String, items: Array) -> OptionButton
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	parent.add_child(row)
-	var l := UI.label(label_text, 18, UI.INK, 700)
+	var l := UI.label(label_text, 21, UI.INK, 700)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(l)
@@ -680,7 +680,7 @@ func _toggle_cell(parent: Control, label_text: String, info := "") -> UI.ThemeSw
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 10)
 	parent.add_child(row)
-	var l := UI.label(label_text, 18, UI.INK, 700)
+	var l := UI.label(label_text, 21, UI.INK, 700)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(l)
 	if info != "":
