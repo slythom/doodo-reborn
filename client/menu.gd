@@ -16,7 +16,7 @@ var _launch_btn: Button
 var _scene_opt: OptionButton
 var _leave_btn: Button
 var _bot_btn: Button
-var _bots_box: VBoxContainer
+var _bots_box: HFlowContainer
 var _chat_log: VBoxContainer
 var _chat_scroll: ScrollContainer
 var _chat_edit: LineEdit
@@ -96,9 +96,22 @@ func _ready() -> void:
 	if OS.get_cmdline_user_args().has("--e2e-browse") and not _e2e_started:
 		_e2e_started = true
 		_e2e_browse()
+	elif OS.get_cmdline_user_args().has("--e2e-lobby") and not _e2e_started:
+		_e2e_started = true
+		_e2e_lobby()
 	elif OS.get_cmdline_user_args().has("--e2e") and not _e2e_started:
 		_e2e_started = true
 		_e2e()
+
+# e2e-lobby : crée une salle + plusieurs bots SANS lancer — capture/test
+# visuel du lobby (chips bots en ligne, tailles de labels options).
+func _e2e_lobby() -> void:
+	_name_edit.text = "e2e-tester"
+	_connect("create")
+	await get_tree().create_timer(1.5).timeout
+	for i in 4:
+		Net.add_bot()
+		await get_tree().create_timer(0.3).timeout
 
 func _e2e() -> void:
 	_name_edit.text = "e2e-tester"
@@ -519,9 +532,13 @@ func _build_ui() -> void:
 	_bot_btn.pressed.connect(func() -> void: Net.add_bot())
 	lv.add_child(_bot_btn)
 
-	# Liste des bots ajoutés : sous le bouton qui les crée (ticket #4).
-	_bots_box = VBoxContainer.new()
-	_bots_box.add_theme_constant_override("separation", 8)
+	# Liste des bots ajoutés : sous le bouton qui les crée (ticket #4),
+	# en ligne avec retour à la ligne (issue #53) — h_separation large
+	# pour garder la croix de chaque bot facile à taper.
+	_bots_box = HFlowContainer.new()
+	_bots_box.alignment = FlowContainer.ALIGNMENT_CENTER
+	_bots_box.add_theme_constant_override("h_separation", 18)
+	_bots_box.add_theme_constant_override("v_separation", 10)
 	lv.add_child(_bots_box)
 
 	# Chat de salle d'attente : texte libre tant que la partie n'est pas
