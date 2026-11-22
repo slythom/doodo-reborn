@@ -2125,9 +2125,12 @@ func _cup_mesh() -> MeshInstance3D:
 
 func _camera() -> void:
 	cam = Camera3D.new()
-	cam.fov = 70.0
+	cam.fov = _scene.get("cam_fov", 70.0)
 	add_child(cam)
-	cam.look_at_from_position(Vector3(0, 1.55, 3.0), Vector3(0, 0.82, -0.3))
+	# Défaut reculé (z=3.9) : à 6 joueurs, les sièges d'extrémité de l'arc
+	# sortaient du champ dans toutes les scènes (issue #55). cam_pos/cam_fov
+	# restent surchargeables par scène via le registry.
+	cam.look_at_from_position(_scene.get("cam_pos", Vector3(0, 1.66, 3.9)), Vector3(0, 0.82, -0.3))
 
 # Herbe mouchetée procédurale — tons de sous-bois sombre, répétée en damier
 # sur le plan de sol (uv1_scale) pour casser l'aplat uniforme.
